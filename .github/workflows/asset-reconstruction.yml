@@ -108,7 +108,21 @@ jobs:
                                               export_counts[(vi, "AudioClip")] += 1
                                       except Exception as e:
                                           item["export_error"] = type(e).__name__
-                              elif typ in {"MonoScript", "GameObject", "Transform", "Mesh", "Material", "Shader", "AnimationClip", "AnimatorController", "PrefabInstance", "SceneAsset"}:
+                              elif typ == "Mesh":
+                                  item["vertex_count"] = len(getattr(data, "m_Vertices", []) or [])
+                                  item["submesh_count"] = len(getattr(data, "m_SubMeshes", []) or [])
+                                  if export_counts[(vi, "Mesh")] < 300:
+                                      try:
+                                          mesh_text = data.export()
+                                          safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in str(name))[:100] or "mesh"
+                                          out = exports / f"v{vi}" / "meshes" / f"{obj.path_id}_{safe_name}.obj"
+                                          out.parent.mkdir(parents=True, exist_ok=True)
+                                          out.write_text(mesh_text, encoding="utf-8", newline="")
+                                          item["exported_to"] = out.as_posix()
+                                          export_counts[(vi, "Mesh")] += 1
+                                      except Exception as e:
+                                          item["export_error"] = type(e).__name__ + ": " + str(e)[:120]
+                              elif typ in {"MonoScript", "GameObject", "Transform", "Material", "Shader", "AnimationClip", "AnimatorController", "PrefabInstance", "SceneAsset"}:
                                   if typ == "MonoScript":
                                       item["class_name"] = str(getattr(data, "m_ClassName", "") or "")
                                       item["namespace"] = str(getattr(data, "m_Namespace", "") or "")
@@ -123,7 +137,7 @@ jobs:
               file_totals.append(vrow)
               print(f"{vrow['version']}: scanned {len(files)} containers, {vrow['objects']} objects")
           (reports / "unity-object-inventory.json").write_text(json.dumps({"versions": file_totals, "objects": rows, "failures": failures}, indent=2))
-          summary = ["# TABZ Unity asset inventory", "", "This report inventories Unity serialized assets from the two supplied Windows builds. It attempts to export all decodable textures and audio clips (with safety caps); it does not claim to reconstruct original Unity scenes or project settings.", ""]
+          summary = ["# TABZ Unity asset inventory", "", "This report inventories Unity serialized assets from the two supplied Windows builds. It attempts to export decodable textures/audio and a capped sample of meshes as OBJ; it does not claim to reconstruct original Unity scenes or project settings.", ""]
           for v in file_totals:
               summary += [f"## {v['version']}", "", f"- Containers scanned: {v['container_files']}", f"- Serialized objects: {v['objects']}", "", "| Object type | Count |", "|---|---:|"]
               summary += [f"| {k} | {n} |" for k,n in sorted(v["types"].items(), key=lambda x: -x[1])]
