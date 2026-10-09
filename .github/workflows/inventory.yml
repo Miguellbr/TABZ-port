@@ -74,35 +74,60 @@ jobs:
         run: |
           python scripts/inventory.py extracted/version-1 --output inventory/version-1
           python scripts/inventory.py extracted/version-2 --output inventory/version-2
-      - name: Compare the two versions
+      - name: Compare the two versions using normalized paths
         run: |
           python - <<'PY'
           import json
-          from pathlib import Path
+          from pathlib import Path, PurePosixPath
           base = Path("inventory")
           reports = {v: json.loads((base / v / "inventory.json").read_text(encoding="utf-8")) for v in ("version-1", "version-2")}
-          maps = {v: {item["path"]: item for item in report["files"]} for v, report in reports.items()}
-          a, b = maps["version-1"], maps["version-2"]
-          only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
+
+          def normalize_paths(report):
+              files = report["files"]
+              parts = [PurePosixPath(item["path"]).parts for item in files]
+              # Archive versions often wrap all files in differently named root folders.
+              # Strip that folder only when every file shares it and has a deeper path.
+              strip_root = bool(parts) and all(len(p) > 1 for p in parts) and len({p[0] for p in parts}) == 1
+              result = {}
+              original_paths = {}
+              for item, p in zip(files, parts):
+                  normalized = PurePosixPath(* (p[1:] if strip_root else p)).as_posix()
+                  result[normalized] = item
+                  original_paths[normalized] = item["path"]
+              return result, original_paths, (parts[0][0] if strip_root else None)
+
+          normalized = {v: normalize_paths(reports[v]) for v in reports}
+          a, paths_a, root_a = normalized["version-1"]
+          b, paths_b, root_b = normalized["version-2"]
+          only_a = sorted(set(a) - set(b))
+          only_b = sorted(set(b) - set(a))
           changed = sorted(p for p in set(a) & set(b) if a[p]["size_bytes"] != b[p]["size_bytes"] or a[p]["sha256"] != b[p]["sha256"])
           result = {
-              "version_1": {"file_count": reports["version-1"]["file_count"], "total_size_bytes": reports["version-1"]["total_size_bytes"]},
-              "version_2": {"file_count": reports["version-2"]["file_count"], "total_size_bytes": reports["version-2"]["total_size_bytes"]},
-              "paths_only_in_version_1": only_a,
-              "paths_only_in_version_2": only_b,
-              "same_path_but_different_content": changed,
-              "note": "Version labels use alphabetical ZIP filename order; source-archives.json maps each label to the original archive."
+              "version_1": {"file_count": reports["version-1"]["file_count"], "total_size_bytes": reports["version-1"]["total_size_bytes"], "stripped_archive_root": root_a},
+              "version_2": {"file_count": reports["version-2"]["file_count"], "total_size_bytes": reports["version-2"]["total_size_bytes"], "stripped_archive_root": root_b},
+              "paths_only_in_version_1": [{"normalized_path": p, "original_path": paths_a[p]} for p in only_a],
+              "paths_only_in_version_2": [{"normalized_path": p, "original_path": paths_b[p]} for p in only_b],
+              "same_path_but_different_content": [{"normalized_path": p, "version_1_path": paths_a[p], "version_2_path": paths_b[p]} for p in changed],
+              "note": "Paths are compared after stripping a single common top-level archive folder when every file in that version shares it."
           }
           (base / "comparison.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-          lines = ["# TABZ version comparison", "", f"- Version 1 files: **{result['version_1']['file_count']}** ({result['version_1']['total_size_bytes']:,} bytes)", f"- Version 2 files: **{result['version_2']['file_count']}** ({result['version_2']['total_size_bytes']:,} bytes)", "", "> Labels follow alphabetical archive filename order. See source-archives.json for the mapping.", "", f"## Only in version 1 ({len(only_a)})", ""]
-          lines += [f"- {p}" for p in only_a] or ["- None"]
+          lines = [
+              "# TABZ version comparison", "",
+              f"- Version 1 files: **{result['version_1']['file_count']}** ({result['version_1']['total_size_bytes']:,} bytes)",
+              f"- Version 2 files: **{result['version_2']['file_count']}** ({result['version_2']['total_size_bytes']:,} bytes)",
+              f"- Version 1 stripped root folder: `{root_a or 'none'}`",
+              f"- Version 2 stripped root folder: `{root_b or 'none'}`", "",
+              "> Paths are normalized to avoid treating different archive root-folder names as file differences.", "",
+              f"## Only in version 1 ({len(only_a)})", ""
+          ]
+          lines += [f"- `{p}` (original: `{paths_a[p]}`)" for p in only_a] or ["- None"]
           lines += ["", f"## Only in version 2 ({len(only_b)})", ""]
-          lines += [f"- {p}" for p in only_b] or ["- None"]
-          lines += ["", f"## Same path, different content ({len(changed)})", ""]
-          lines += [f"- {p}" for p in changed] or ["- None"]
+          lines += [f"- `{p}` (original: `{paths_b[p]}`)" for p in only_b] or ["- None"]
+          lines += ["", f"## Same normalized path, different content ({len(changed)})", ""]
+          lines += [f"- `{p}` (v1: `{paths_a[p]}`; v2: `{paths_b[p]}`)" for p in changed] or ["- None"]
           lines += ["", "This report contains file metadata only, not game binaries.", ""]
           (base / "COMPARISON.md").write_text("\n".join(lines), encoding="utf-8")
-          print("Comparison report created.")
+          print(f"Comparison created: {len(only_a)} unique to v1, {len(only_b)} unique to v2, {len(changed)} changed.")
           PY
       - name: Upload metadata reports only
         uses: actions/upload-artifact@v4
