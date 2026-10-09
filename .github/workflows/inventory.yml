@@ -6,7 +6,7 @@ on:
     - cron: "23 8 * * 1"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   inventory:
@@ -235,6 +235,45 @@ jobs:
           (base / "COMPARISON.md").write_text("\n".join(lines), encoding="utf-8")
           print(f"Comparison created: {len(only_a)} unique to v1, {len(only_b)} unique to v2, {len(changed)} changed.")
           PY
+
+      - name: Publish each extracted version to its own branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Each branch keeps the original extracted folder tree under TABZ/.
+          # Files larger than 90 MiB are tracked with Git LFS to avoid GitHub's
+          # 100 MiB per-file Git limit.
+          publish_version() {
+            local source_dir="$1"
+            local branch="$2"
+            git checkout -B "$branch" origin/main
+            rm -rf TABZ
+            mkdir -p TABZ
+            cp -a "$source_dir"/. TABZ/
+
+            while IFS= read -r -d '' file; do
+              relative="${file#./}"
+              git lfs track "$relative"
+            done < <(find TABZ -type f -size +90M -print0)
+
+            git add .gitattributes TABZ
+            if git diff --cached --quiet; then
+              echo "No changes to publish on $branch"
+            else
+              git commit -m "Import extracted TABZ build: $branch"
+            fi
+            git push origin "HEAD:refs/heads/$branch"
+          }
+
+          publish_version extracted/version-1 tabz-v4
+          publish_version extracted/version-2 tabz-v5.1
+
       - name: Upload extracted game folders (temporary, not committed)
         uses: actions/upload-artifact@v4
         with:
