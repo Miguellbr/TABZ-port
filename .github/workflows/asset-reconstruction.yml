@@ -109,7 +109,7 @@ jobs:
                                       except Exception as e:
                                           item["export_error"] = type(e).__name__
                               elif typ == "Mesh":
-                                  item["vertex_count"] = len(getattr(data, "m_Vertices", []) or [])
+                                  item["vertex_count"] = len(getattr(data, "vertices", []) or getattr(data, "m_Vertices", []) or [])
                                   item["submesh_count"] = len(getattr(data, "m_SubMeshes", []) or [])
                                   if export_counts[(vi, "Mesh")] < 300:
                                       try:
