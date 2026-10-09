@@ -2,6 +2,9 @@ name: Deep TABZ technical analysis
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/deep-analysis.yml"
 
 permissions:
   contents: read
