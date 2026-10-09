@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install download helper
-        run: python -m pip install --upgrade gdown py7zr
+        run: python -m pip install --upgrade gdown py7zr dnfile
       - name: Download public Drive folder
         run: |
           mkdir -p downloads extracted inventory
@@ -74,6 +74,77 @@ jobs:
         run: |
           python scripts/inventory.py extracted/version-1 --output inventory/version-1
           python scripts/inventory.py extracted/version-2 --output inventory/version-2
+      - name: Analyze .NET assembly metadata (no binaries uploaded)
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import dnfile
+
+          roots = {"version-1": Path("extracted/version-1"), "version-2": Path("extracted/version-2")}
+          output = Path("inventory")
+          all_reports = {}
+          for version, root in roots.items():
+              entries = []
+              for path in sorted(root.rglob("*")):
+                  if not path.is_file() or path.suffix.lower() != ".dll":
+                      continue
+                  row = {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size}
+                  try:
+                      pe = dnfile.dnPE(str(path))
+                      machine = getattr(getattr(pe, "FILE_HEADER", None), "Machine", None)
+                      row["pe_machine"] = str(machine) if machine is not None else None
+                      net = getattr(pe, "net", None)
+                      tables = getattr(getattr(net, "mdtables", None), "tables", None) if net else None
+                      assemblies = getattr(getattr(net, "mdtables", None), "Assembly", None) if net else None
+                      if assemblies and getattr(assemblies, "rows", None):
+                          a = assemblies.rows[0]
+                          row["is_dotnet_assembly"] = True
+                          row["assembly"] = {
+                              "name": str(getattr(a, "Name", "")),
+                              "version": ".".join(str(getattr(a, field, 0)) for field in ("MajorVersion", "MinorVersion", "BuildNumber", "RevisionNumber")),
+                              "culture": str(getattr(a, "Culture", "")) or "neutral"
+                          }
+                      else:
+                          row["is_dotnet_assembly"] = False
+                      refs_table = getattr(getattr(net, "mdtables", None), "AssemblyRef", None) if net else None
+                      refs = []
+                      for ref in getattr(refs_table, "rows", []) or []:
+                          refs.append({
+                              "name": str(getattr(ref, "Name", "")),
+                              "version": ".".join(str(getattr(ref, field, 0)) for field in ("MajorVersion", "MinorVersion", "BuildNumber", "RevisionNumber")),
+                              "culture": str(getattr(ref, "Culture", "")) or "neutral"
+                          })
+                      if refs:
+                          row["references"] = sorted(refs, key=lambda item: item["name"].casefold())
+                      try:
+                          pe.close()
+                      except Exception:
+                          pass
+                  except Exception as exc:
+                      row["analysis_error"] = f"{type(exc).__name__}: {exc}"
+                  entries.append(row)
+              report = {"version": version, "dll_count": len(entries), "assemblies": entries}
+              all_reports[version] = report
+              (output / version / "dotnet-assemblies.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          lines = ["# .NET assembly metadata", "", "This report extracts PE/.NET metadata only. It does not upload or publish game binaries.", ""]
+          for version, report in all_reports.items():
+              lines += [f"## {version} — {report['dll_count']} DLL files", ""]
+              for item in report["assemblies"]:
+                  lines += [f"### `{item['path']}`", ""]
+                  if item.get("assembly"):
+                      a = item["assembly"]
+                      lines += [f"- Assembly: `{a['name']}`", f"- Version: `{a['version']}`", f"- Culture: `{a['culture']}`"]
+                      refs = item.get("references", [])
+                      lines += [f"- Referenced assemblies ({len(refs)}): " + (", ".join(f"`{r['name']}` {r['version']}" for r in refs) if refs else "none recorded")]
+                  elif item.get("is_dotnet_assembly") is False:
+                      lines += ["- No .NET Assembly metadata table detected (may be a native DLL or another PE file)."]
+                  else:
+                      lines += [f"- Metadata parsing issue: `{item.get('analysis_error', 'unknown')}`"]
+                  lines.append("")
+          (output / "DOTNET-ASSEMBLIES.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("Wrote metadata-only .NET assembly reports.")
+          PY
       - name: Compare the two versions using normalized paths
         run: |
           python - <<'PY'
