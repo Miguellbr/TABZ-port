@@ -1,0 +1,129 @@
+name: Deep TABZ technical analysis
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install analysis tools
+        run: |
+          python -m pip install --upgrade gdown py7zr dnfile UnityPy
+          dotnet tool install ilspycmd --tool-path "$HOME/.dotnet/tools"
+          sudo apt-get update
+          sudo apt-get install -y binutils file
+      - name: Download and extract both versions
+        run: |
+          mkdir -p downloads extracted reports work/decompiled
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archives = sorted((p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip",".7z"}), key=lambda p:p.name.casefold())
+          if len(archives) != 2: raise SystemExit(f"Expected exactly 2 archives, found {len(archives)}")
+          for i, archive in enumerate(archives, 1):
+              out = pathlib.Path("extracted") / f"version-{i}"; out.mkdir(parents=True, exist_ok=True)
+              def check(name):
+                  rel = pathlib.PurePosixPath(name.replace("\\", "/"))
+                  if rel.is_absolute() or ".." in rel.parts: raise RuntimeError(f"Unsafe path: {name}")
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as z:
+                      for x in z.infolist(): check(x.filename)
+                      z.extractall(out)
+              else:
+                  with py7zr.SevenZipFile(archive) as z:
+                      for x in z.getnames(): check(x)
+                      z.extractall(path=out)
+              print(f"{archive.name} -> {out}")
+          PY
+      - name: Analyze engine, PE metadata, plugins and binary strings
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          import dnfile, UnityPy
+          result = {"scope":"Metadata and keyword counts only; no game binaries or decompiled source are published.","versions":[]}
+          for i in (1,2):
+              root=pathlib.Path(f"extracted/version-{i}")
+              row={"version":f"version-{i}","files":[],"unity_metadata":[],"plugin_candidates":[],"binary_string_markers":{}}
+              for p in sorted(root.rglob("*")):
+                  if not p.is_file(): continue
+                  rel=p.relative_to(root).as_posix()
+                  if p.name.lower() in {"game.exe","unityplayer.dll"} or p.name.lower().startswith("assembly-csharp"):
+                      x={"path":rel,"size_bytes":p.stat().st_size}
+                      try:
+                          pe=dnfile.dnPE(str(p)); fh=getattr(pe,"FILE_HEADER",None)
+                          x["pe_machine"]=str(getattr(fh,"Machine","")) if fh else None
+                          net=getattr(pe,"net",None); tab=getattr(getattr(net,"mdtables",None),"Assembly",None) if net else None
+                          if tab and tab.rows:
+                              a=tab.rows[0]; x["managed_assembly"]=str(getattr(a,"Name",""))
+                          pe.close()
+                      except Exception as e: x["pe_note"]=type(e).__name__
+                      row["files"].append(x)
+                  if p.suffix.lower()==".dll" and any(k in rel.lower() for k in ("steam","fmod","mono","unity","photon","xinput","directx")):
+                      row["plugin_candidates"].append({"path":rel,"size_bytes":p.stat().st_size})
+                  if p.name.lower()=="globalgamemanagers":
+                      try:
+                          env=UnityPy.load(str(p))
+                          row["unity_metadata"].append({"path":rel,"object_types":sorted(set(o.type.name for o in env.objects))[:80],"object_count":len(env.objects)})
+                      except Exception as e: row["unity_metadata"].append({"path":rel,"parse_error":type(e).__name__+": "+str(e)[:200]})
+              for p in root.rglob("*"):
+                  if p.is_file() and p.name.lower() in {"game.exe","unityplayer.dll"}:
+                      raw=p.read_bytes()
+                      strings=[m.group().decode("latin1","ignore") for m in re.finditer(rb"[ -~]{5,}",raw)]
+                      joined="\n".join(strings).lower()
+                      terms=["unity version","direct3d","directx","vulkan","opengl","android","windows","steam_api","mono","il2cpp","xinput","controller","photon","fmod"]
+                      row["binary_string_markers"][p.relative_to(root).as_posix()]={t:joined.count(t) for t in terms if t in joined}
+              result["versions"].append(row)
+          pathlib.Path("reports/engine-pe-analysis.json").write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
+      - name: Decompile managed assemblies and summarize without publishing source
+        run: |
+          set -euo pipefail
+          for version in version-1 version-2; do
+            dll=$(find "extracted/$version" -type f \( -iname 'Assembly-CSharp.dll' -o -iname 'Assembly-Csharp.dll' \) -print -quit)
+            if [ -z "$dll" ]; then echo "No main game assembly in $version"; continue; fi
+            mkdir -p "work/decompiled/$version"
+            "$HOME/.dotnet/tools/ilspycmd" -o "work/decompiled/$version" "$dll" || echo "Partial decompilation for $version"
+          done
+          python - <<'PY'
+          import json,pathlib,re
+          base=pathlib.Path("work/decompiled")
+          terms=["UnityEngine","UnityEditor","Application.platform","RuntimePlatform","WindowsPlayer","Android","Input.GetKey","Input.GetAxis","KeyCode","Screen.orientation","PhotonNetwork","PhotonView","Steamworks","SteamAPI","DllImport","user32","kernel32","Direct3D","FMOD","NetworkManager","PlayerController","Zombie","Weapon","Spawn","GameManager","Menu","Save"]
+          reports=[]; lines=["# Managed-code static analysis","","Assemblies were decompiled only inside the temporary runner. Decompiled source is not published.",""]
+          for d in sorted(base.iterdir()) if base.exists() else []:
+              files=list(d.rglob("*.cs")); joined="\n".join(p.read_text(errors="ignore") for p in files)
+              counts={t:len(re.findall(re.escape(t),joined,re.I)) for t in terms}; counts={k:v for k,v in counts.items() if v}
+              types=[]
+              for p in files:
+                  s=p.read_text(errors="ignore")
+                  types += [{"name":m.group(1),"file":p.name} for m in re.finditer(r"\b(?:class|struct|enum|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",s)]
+              r={"version":d.name,"cs_files":len(files),"approx_source_lines":sum(len(p.read_text(errors="ignore").splitlines()) for p in files),"keyword_counts":counts,"types":types[:500]}
+              reports.append(r); lines += [f"## {d.name}","","- Decompiled C# files: **{r['cs_files']}**",f"- Approximate lines: **{r['approx_source_lines']:,}**","","### Keyword counts",""] + [f"- `{k}`: {v}" for k,v in counts.items()] + ["","### Type names (up to 500)",""] + [f"- `{t['name']}` (`{t['file']}`)" for t in r["types"]] + [""]
+          pathlib.Path("reports/managed-code-analysis.json").write_text(json.dumps(reports,indent=2))
+          pathlib.Path("reports/MANAGED-CODE-ANALYSIS.md").write_text("\n".join(lines)+"\n")
+          print(pathlib.Path("reports/MANAGED-CODE-ANALYSIS.md").read_text())
+          PY
+      - name: Add reports to Actions summary
+        if: always()
+        run: |
+          for f in reports/*.md; do [ -f "$f" ] && cat "$f" >> "$GITHUB_STEP_SUMMARY"; done
+      - name: Upload metadata-only reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-deep-analysis
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
