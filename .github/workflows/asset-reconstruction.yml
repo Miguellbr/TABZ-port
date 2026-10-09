@@ -1,0 +1,148 @@
+name: TABZ asset reconstruction inventory
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/asset-reconstruction.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install extraction tools
+        run: python -m pip install --upgrade gdown py7zr UnityPy Pillow
+      - name: Download and extract both Windows builds
+        run: |
+          mkdir -p downloads extracted reports
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archives = [p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"}]
+          if len(archives) != 2:
+              raise SystemExit(f"Expected two archives, found {len(archives)}: {[p.name for p in archives]}")
+          # Identify versions by archive names instead of relying on filesystem order.
+          archives.sort(key=lambda p: (0 if "v4" in p.name.lower() else 1 if "5.1" in p.name.lower() or "v5" in p.name.lower() else 2, p.name.lower()))
+          for i, archive in enumerate(archives, 1):
+              out = pathlib.Path("extracted") / f"version-{i}"
+              out.mkdir(parents=True, exist_ok=True)
+              def safe(name):
+                  rel = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                  if rel.is_absolute() or ".." in rel.parts:
+                      raise RuntimeError(f"Unsafe archive path: {name}")
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as z:
+                      for entry in z.infolist(): safe(entry.filename)
+                      z.extractall(out)
+              else:
+                  with py7zr.SevenZipFile(archive) as z:
+                      for name in z.getnames(): safe(name)
+                      z.extractall(path=out)
+              print(f"{archive.name} -> {out}")
+          PY
+      - name: Inventory Unity assets and export selected resources
+        run: |
+          python - <<'PY'
+          import collections, json, pathlib, traceback
+          import UnityPy
+          from PIL import Image
+          reports = pathlib.Path("reports")
+          exports = pathlib.Path("exports")
+          rows = []
+          failures = []
+          export_counts = collections.Counter()
+          type_totals = collections.Counter()
+          file_totals = []
+          # Asset containers, resource bundles and scenes are all scanned, but the executable and managed DLLs are excluded.
+          valid_ext = {".assets", ".bundle", ".unity3d", ".assetbundle", ".ress", ".resource"}
+          for vi in (1, 2):
+              root = pathlib.Path(f"extracted/version-{vi}")
+              files = [p for p in root.rglob("*") if p.is_file() and (p.suffix.lower() in valid_ext or p.name.lower() in {"globalgamemanagers", "level0", "level1", "level2", "level3"})]
+              vrow = {"version": f"version-{vi}", "container_files": len(files), "objects": 0, "types": {}, "files": []}
+              for path in files:
+                  try:
+                      env = UnityPy.load(str(path))
+                      frow = {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "objects": len(env.objects), "types": {}}
+                      for obj in env.objects:
+                          typ = obj.type.name
+                          frow["types"][typ] = frow["types"].get(typ, 0) + 1
+                          type_totals[(vi, typ)] += 1
+                          vrow["objects"] += 1
+                          try:
+                              data = obj.read()
+                              name = getattr(data, "m_Name", "") or ""
+                              item = {"version": vi, "container": frow["path"], "type": typ, "name": str(name)[:200], "path_id": int(obj.path_id)}
+                              if typ == "Texture2D":
+                                  item["width"] = int(getattr(data, "m_Width", 0))
+                                  item["height"] = int(getattr(data, "m_Height", 0))
+                                  item["format"] = str(getattr(data, "m_TextureFormat", ""))
+                                  if export_counts[(vi, "Texture2D")] < 100:
+                                      try:
+                                          image = data.image
+                                          if image:
+                                              out = exports / f"v{vi}" / "textures" / f"{obj.path_id}_{pathlib.Path(name).stem or 'texture'}.png"
+                                              out.parent.mkdir(parents=True, exist_ok=True)
+                                              image.save(out)
+                                              item["exported_to"] = out.as_posix()
+                                              export_counts[(vi, "Texture2D")] += 1
+                                      except Exception as e:
+                                          item["export_error"] = type(e).__name__
+                              elif typ == "AudioClip":
+                                  item["samples"] = list(getattr(data, "m_Samples", {}).keys())[:10] if isinstance(getattr(data, "m_Samples", None), dict) else []
+                                  if export_counts[(vi, "AudioClip")] < 30:
+                                      try:
+                                          samples = data.samples
+                                          for sample_name, audio in samples.items():
+                                              out = exports / f"v{vi}" / "audio" / f"{obj.path_id}_{pathlib.Path(str(sample_name)).stem or 'audio'}.wav"
+                                              out.parent.mkdir(parents=True, exist_ok=True)
+                                              out.write_bytes(audio)
+                                              item.setdefault("exported_audio", []).append(out.as_posix())
+                                              export_counts[(vi, "AudioClip")] += 1
+                                      except Exception as e:
+                                          item["export_error"] = type(e).__name__
+                              elif typ in {"MonoScript", "GameObject", "Transform", "Mesh", "Material", "Shader", "AnimationClip", "AnimatorController", "PrefabInstance", "SceneAsset"}:
+                                  if typ == "MonoScript":
+                                      item["class_name"] = str(getattr(data, "m_ClassName", "") or "")
+                                      item["namespace"] = str(getattr(data, "m_Namespace", "") or "")
+                                      item["assembly"] = str(getattr(data, "m_AssemblyName", "") or "")
+                              rows.append(item)
+                          except Exception as e:
+                              failures.append({"version": vi, "container": frow["path"], "path_id": int(obj.path_id), "type": typ, "error": type(e).__name__})
+                      vrow["files"].append(frow)
+                  except Exception as e:
+                      failures.append({"version": vi, "container": path.relative_to(root).as_posix(), "error": type(e).__name__, "message": str(e)[:180]})
+              vrow["types"] = dict(sorted(collections.Counter({k: n for f in vrow["files"] for k,n in f["types"].items()}).items()))
+              file_totals.append(vrow)
+              print(f"{vrow['version']}: scanned {len(files)} containers, {vrow['objects']} objects")
+          (reports / "unity-object-inventory.json").write_text(json.dumps({"versions": file_totals, "objects": rows, "failures": failures}, indent=2))
+          summary = ["# TABZ Unity asset inventory", "", "This report inventories Unity serialized assets from the two supplied Windows builds. It exports a bounded sample of textures/audio for format validation; it does not claim to reconstruct original Unity scenes or project settings.", ""]
+          for v in file_totals:
+              summary += [f"## {v['version']}", "", f"- Containers scanned: {v['container_files']}", f"- Serialized objects: {v['objects']}", "", "| Object type | Count |", "|---|---:|"]
+              summary += [f"| {k} | {n} |" for k,n in sorted(v["types"].items(), key=lambda x: -x[1])]
+              summary += [""]
+          summary += ["## Export sample", ""] + [f"- Version {v}: {kind}: {n} exported" for (v,kind),n in sorted(export_counts.items())] + ["", f"Parse/export issues recorded: {len(failures)}", ""]
+          (reports / "UNITY-ASSET-INVENTORY.md").write_text("\n".join(summary))
+          print("\n".join(summary))
+          PY
+      - name: Publish summary
+        if: always()
+        run: |
+          [ ! -f reports/UNITY-ASSET-INVENTORY.md ] || cat reports/UNITY-ASSET-INVENTORY.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload inventory and sample extracted assets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-unity-assets
+          path: |
+            reports/
+            exports/
+          if-no-files-found: warn
+          retention-days: 14
