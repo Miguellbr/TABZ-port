@@ -24,7 +24,7 @@ jobs:
       - name: Download public Drive folder
         run: |
           mkdir -p downloads extracted inventory
-          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" --remaining-ok -O downloads
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
       - name: Validate and extract both versions separately
         shell: bash
         run: |
