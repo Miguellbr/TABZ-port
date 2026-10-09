@@ -84,7 +84,7 @@ jobs:
                                   item["width"] = int(getattr(data, "m_Width", 0))
                                   item["height"] = int(getattr(data, "m_Height", 0))
                                   item["format"] = str(getattr(data, "m_TextureFormat", ""))
-                                  if export_counts[(vi, "Texture2D")] < 100:
+                                  if export_counts[(vi, "Texture2D")] < 1000:
                                       try:
                                           image = data.image
                                           if image:
@@ -97,7 +97,7 @@ jobs:
                                           item["export_error"] = type(e).__name__
                               elif typ == "AudioClip":
                                   item["samples"] = list(getattr(data, "m_Samples", {}).keys())[:10] if isinstance(getattr(data, "m_Samples", None), dict) else []
-                                  if export_counts[(vi, "AudioClip")] < 30:
+                                  if export_counts[(vi, "AudioClip")] < 100:
                                       try:
                                           samples = data.samples
                                           for sample_name, audio in samples.items():
@@ -123,7 +123,7 @@ jobs:
               file_totals.append(vrow)
               print(f"{vrow['version']}: scanned {len(files)} containers, {vrow['objects']} objects")
           (reports / "unity-object-inventory.json").write_text(json.dumps({"versions": file_totals, "objects": rows, "failures": failures}, indent=2))
-          summary = ["# TABZ Unity asset inventory", "", "This report inventories Unity serialized assets from the two supplied Windows builds. It exports a bounded sample of textures/audio for format validation; it does not claim to reconstruct original Unity scenes or project settings.", ""]
+          summary = ["# TABZ Unity asset inventory", "", "This report inventories Unity serialized assets from the two supplied Windows builds. It attempts to export all decodable textures and audio clips (with safety caps); it does not claim to reconstruct original Unity scenes or project settings.", ""]
           for v in file_totals:
               summary += [f"## {v['version']}", "", f"- Containers scanned: {v['container_files']}", f"- Serialized objects: {v['objects']}", "", "| Object type | Count |", "|---|---:|"]
               summary += [f"| {k} | {n} |" for k,n in sorted(v["types"].items(), key=lambda x: -x[1])]
