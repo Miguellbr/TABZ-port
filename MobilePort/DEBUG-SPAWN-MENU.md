@@ -2,9 +2,14 @@
 
 The Android test build should include an optional **DEV** button that opens a spawn menu. It is a testing tool, not part of the final player-facing UI.
 
+## Design assumption
+
+TABZ appears to be heavily weapon/pickup-focused: most interactable objects seem to be weapons, with structures and enemies making up much of the remainder. Treat this as a working assumption until the recovered gameplay code and prefabs confirm the complete list. The menu should therefore prioritize spawning and testing weapons, rather than building a large generic interaction framework first.
+
 ## First version
 
-- Spawn any recovered prefab assigned in the Inspector (zombies, special enemies, player dummies, weapons/items).
+- **Weapons first:** spawn recovered weapon pickups, then test pickup, equip, aim, fire, reload and drop if those actions exist in the recovered implementation.
+- Spawn enemy variants and structures as separate categories.
 - Spawn all assigned entries for quick stress tests.
 - Remove everything spawned by the menu to reset a test.
 - Display missing prefab assignments clearly instead of silently spawning nothing.
@@ -17,12 +22,13 @@ The Android test build should include an optional **DEV** button that opens a sp
 
 ## Suggested menu groups once prefabs are recovered
 
-1. **Enemies:** regular zombie variants, fast/thin/wide/tiny zombies, king/giant variants.
-2. **Weapons & items:** each recovered weapon, ammo, pickup and interactable.
-3. **Player tests:** movement, jump, sprint, camera look, fire/reload, interaction.
-4. **World tests:** spawn distance, enemy count/performance, reset spawned objects.
+1. **Weapons:** one entry per recovered weapon/pickup; use these to validate interaction, equip, firing, aiming, ammo and reload.
+2. **Enemies:** regular zombie variants and special types (including thin/wide/tiny, king/giant if confirmed as actual spawnable prefabs).
+3. **Structures & world objects:** recovered structures and objects that can be spawned independently.
+4. **Player/function tests:** movement, jump, sprint, camera look, damage/health, fire/reload and pickup interaction.
+5. **Stress/reset:** spawn multiple enemies or weapons, then remove all objects created by the menu.
 
-The current script only implements generic prefab spawn/reset. Function-specific test buttons should be wired after the offline player and recovered gameplay components are running; health, weapon, and AI methods must not be guessed from asset names alone.
+The current script only implements generic prefab spawn/reset. Weapon-specific actions and enemy AI tests should be wired after the offline player and recovered gameplay components are running; health, weapon, and AI methods must not be guessed from asset names alone.
 
 ## How to enable it
 
