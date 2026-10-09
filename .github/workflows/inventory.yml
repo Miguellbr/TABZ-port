@@ -145,6 +145,41 @@ jobs:
           (output / "DOTNET-ASSEMBLIES.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("Wrote metadata-only .NET assembly reports.")
           PY
+      - name: Print .NET findings in Actions summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          out = Path("inventory")
+          lines = ["## TABZ DLL / .NET findings", "",
+                   "Metadata-only analysis; no game binaries are printed or published here.", ""]
+          for version in ("version-1", "version-2"):
+              report = json.loads((out / version / "dotnet-assemblies.json").read_text(encoding="utf-8"))
+              assemblies = [x for x in report["assemblies"] if x.get("assembly")]
+              non_dotnet = [x for x in report["assemblies"] if x.get("is_dotnet_assembly") is False]
+              errors = [x for x in report["assemblies"] if x.get("analysis_error")]
+              lines += [f"### {version}", "",
+                        f"- DLL files: **{report['dll_count']}**",
+                        f"- Recognized .NET assemblies: **{len(assemblies)}**",
+                        f"- PE files without .NET Assembly metadata: **{len(non_dotnet)}**",
+                        f"- Metadata errors: **{len(errors)}**", "",
+                        "| File | Assembly name | Version | References (first 20) |",
+                        "|---|---|---|---|"]
+              for item in assemblies:
+                  a = item["assembly"]
+                  refs = ", ".join(r["name"] for r in item.get("references", [])[:20]) or "—"
+                  lines.append(f"| `{item['path']}` | `{a['name']}` | `{a['version']}` | {refs} |")
+              for item in non_dotnet:
+                  lines.append(f"- Native/non-.NET candidate: `{item['path']}` ({item['size_bytes']:,} bytes)")
+              for item in errors:
+                  lines.append(f"- Parse issue: `{item['path']}`: {item['analysis_error']}")
+              lines.append("")
+          summary = "\n".join(lines) + "\n"
+          print(summary)
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(summary)
+          PY
       - name: Compare the two versions using normalized paths
         run: |
           python - <<'PY'
