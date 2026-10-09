@@ -68,7 +68,7 @@ jobs:
                       zf.extractall(path=out)
               source_info.append({"version": version, "source_archive": archive.name, "archive_format": archive.suffix.lower().lstrip("."), "source_size_bytes": archive.stat().st_size})
               print(f"{archive.name} -> {out}")
-          pathlib.Path("inventory/source-zips.json").write_text(json.dumps(source_info, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          pathlib.Path("inventory/source-archives.json").write_text(json.dumps(source_info, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
           PY
       - name: Generate separate inventories
         run: |
@@ -91,10 +91,10 @@ jobs:
               "paths_only_in_version_1": only_a,
               "paths_only_in_version_2": only_b,
               "same_path_but_different_content": changed,
-              "note": "Version labels use alphabetical ZIP filename order; source-zips.json maps each label to the original ZIP."
+              "note": "Version labels use alphabetical ZIP filename order; source-archives.json maps each label to the original archive."
           }
           (base / "comparison.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-          lines = ["# TABZ version comparison", "", f"- Version 1 files: **{result['version_1']['file_count']}** ({result['version_1']['total_size_bytes']:,} bytes)", f"- Version 2 files: **{result['version_2']['file_count']}** ({result['version_2']['total_size_bytes']:,} bytes)", "", "> Labels follow alphabetical ZIP filename order. See source-zips.json for the mapping.", "", f"## Only in version 1 ({len(only_a)})", ""]
+          lines = ["# TABZ version comparison", "", f"- Version 1 files: **{result['version_1']['file_count']}** ({result['version_1']['total_size_bytes']:,} bytes)", f"- Version 2 files: **{result['version_2']['file_count']}** ({result['version_2']['total_size_bytes']:,} bytes)", "", "> Labels follow alphabetical archive filename order. See source-archives.json for the mapping.", "", f"## Only in version 1 ({len(only_a)})", ""]
           lines += [f"- {p}" for p in only_a] or ["- None"]
           lines += ["", f"## Only in version 2 ({len(only_b)})", ""]
           lines += [f"- {p}" for p in only_b] or ["- None"]
