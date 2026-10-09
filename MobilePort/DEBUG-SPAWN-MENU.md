@@ -2,33 +2,33 @@
 
 The Android test build should include an optional **DEV** button that opens a spawn menu. It is a testing tool, not part of the final player-facing UI.
 
-## Design assumption
+## Scope decision
 
-TABZ appears to be heavily weapon/pickup-focused: most interactable objects seem to be weapons, with structures and enemies making up much of the remainder. Treat this as a working assumption until the recovered gameplay code and prefabs confirm the complete list. The menu should therefore prioritize spawning and testing weapons, rather than building a large generic interaction framework first.
+The first playable prototype focuses on **weapons and enemies only**. Full map/structure testing is deferred until later. The original gameplay scene inventory contains an `ItemSpawns` root with `WorldItemAdder`, plus `Map/WorldSpawn`, `Map/SpawnPoints city1`, `Map/SpawnPoints city2`, and `Map/singleSpawn`. This supports investigating the original spawn system, but does not yet prove the exact item distribution rules.
+
+The working hypothesis is that most interactables are weapons and that ordinary weapon pickups are distributed around points of interest (POIs), with a possible special weapon tied to the demon mountain. This should be verified against the recovered `WorldItemAdder`/spawn scripts and serialized references before recreating the map's item placements. The special weapon's name and exact condition are not yet confirmed.
 
 ## First version
 
-- **Weapons first:** spawn recovered weapon pickups, then test pickup, equip, aim, fire, reload and drop if those actions exist in the recovered implementation.
-- Spawn enemy variants and structures as separate categories.
-- Spawn all assigned entries for quick stress tests.
+- **Weapons first:** spawn recovered weapon pickups, then test pickup, equip, aim, fire and reload.
+- **Enemies second:** spawn individual enemy types and, once stable, several at once for combat and performance testing.
 - Remove everything spawned by the menu to reset a test.
 - Display missing prefab assignments clearly instead of silently spawning nothing.
 - Work with touch input on Android; keep **F1** as a desktop/editor toggle.
 - Cap tracked spawned instances to reduce accidental performance/memory problems on the phone.
 
-## Implementation status
-
-`Assets/Scripts/Mobile/DebugSpawnMenu.cs` provides the runtime UI and generic prefab spawning. It is deliberately generic because we have not yet confirmed that the recovered TABZ character assets can be rebuilt as working prefabs with their original scripts, rigging, and AI. Unassigned entries remain disabled; this avoids pretending that a model export is a functioning zombie.
-
 ## Suggested menu groups once prefabs are recovered
 
-1. **Weapons:** one entry per recovered weapon/pickup; use these to validate interaction, equip, firing, aiming, ammo and reload.
-2. **Enemies:** regular zombie variants and special types (including thin/wide/tiny, king/giant if confirmed as actual spawnable prefabs).
-3. **Structures & world objects:** recovered structures and objects that can be spawned independently.
-4. **Player/function tests:** movement, jump, sprint, camera look, damage/health, fire/reload and pickup interaction.
-5. **Stress/reset:** spawn multiple enemies or weapons, then remove all objects created by the menu.
+1. **Weapons:** one entry per recovered weapon/pickup; validate pickup, equip, fire, aim, ammo and reload.
+2. **Enemies:** normal zombie types and confirmed special types (thin/wide/tiny, king/giant only if the serialized assets confirm them as usable spawnable objects).
+3. **Combat tests:** enemy count, damage/death checks, weapon switching, reset.
+4. **Later — map tests:** structures, POIs, normal item distribution and the suspected demon-mountain special weapon. Do not make this a blocker for the first playable prototype.
 
-The current script only implements generic prefab spawn/reset. Weapon-specific actions and enemy AI tests should be wired after the offline player and recovered gameplay components are running; health, weapon, and AI methods must not be guessed from asset names alone.
+## Implementation status
+
+`Assets/Scripts/Mobile/DebugSpawnMenu.cs` provides generic runtime UI and prefab spawning. It is deliberately generic because we have not yet confirmed that the recovered TABZ character assets can be rebuilt as working prefabs with their original scripts, rigging, and AI. Unassigned entries remain disabled; this avoids pretending that a model export is a functioning zombie.
+
+The current script only implements generic prefab spawn/reset. Weapon-specific actions and enemy AI tests should be wired after the offline player and recovered gameplay components are running; their methods must not be guessed from asset names alone.
 
 ## How to enable it
 
