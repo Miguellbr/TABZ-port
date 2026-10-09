@@ -1,0 +1,156 @@
+name: TABZ scene hierarchy reconstruction
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/scene-hierarchy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  hierarchy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Unity asset tools
+        run: python -m pip install --upgrade gdown py7zr UnityPy
+      - name: Download and extract the two builds
+        run: |
+          mkdir -p downloads extracted reports
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archives = [p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"}]
+          if len(archives) != 2:
+              raise SystemExit("Expected exactly two archives; got " + repr([p.name for p in archives]))
+          archives.sort(key=lambda p: (0 if "v4" in p.name.lower() else 1 if "5.1" in p.name.lower() or "v5" in p.name.lower() else 2, p.name.lower()))
+          for i, archive in enumerate(archives, 1):
+              out = pathlib.Path("extracted") / f"version-{i}"
+              out.mkdir(parents=True, exist_ok=True)
+              def safe(name):
+                  rel = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                  if rel.is_absolute() or ".." in rel.parts: raise RuntimeError("Unsafe archive path: " + name)
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as z:
+                      for x in z.infolist(): safe(x.filename)
+                      z.extractall(out)
+              else:
+                  with py7zr.SevenZipFile(archive) as z:
+                      for x in z.getnames(): safe(x)
+                      z.extractall(path=out)
+              print(archive.name, "->", out)
+          PY
+      - name: Recover scene object hierarchy and script bindings
+        run: |
+          python - <<'PY'
+          import collections, json, pathlib
+          import UnityPy
+          outdir = pathlib.Path("reports")
+          result = {"versions": [], "notes": [
+              "Hierarchy is reconstructed from serialized Transform/GameObject references where available.",
+              "Missing references and UnityPy parser limitations are recorded; this is not an original Unity Editor project."
+          ]}
+          wanted = {"level0", "level1", "level2", "level3", "resources.assets", "sharedassets0.assets", "sharedassets1.assets"}
+          for vi in (1, 2):
+              root = pathlib.Path(f"extracted/version-{vi}")
+              candidates = [p for p in root.rglob("*") if p.is_file() and (p.name.lower() in wanted or p.name.lower().startswith("sharedassets") and p.suffix.lower() == ".assets")]
+              vr = {"version": f"version-{vi}", "containers": [], "errors": []}
+              for path in candidates:
+                  try:
+                      env = UnityPy.load(str(path))
+                      objects = list(env.objects)
+                      by_path = {int(o.path_id): o for o in objects}
+                      gameobjects = {}
+                      transforms = {}
+                      component_names = collections.defaultdict(list)
+                      def pointer_id(ptr):
+                          try: return int(ptr.path_id)
+                          except Exception: return 0
+                      for obj in objects:
+                          try:
+                              data = obj.read()
+                              if obj.type.name == "GameObject":
+                                  go = {"path_id": int(obj.path_id), "name": str(getattr(data, "m_Name", "") or ""), "components": []}
+                                  for comp in getattr(data, "m_Components", []) or []:
+                                      ptr = getattr(comp, "component", comp)
+                                      pid = pointer_id(ptr)
+                                      typ = "Unknown"
+                                      try:
+                                          co = ptr.read()
+                                          typ = co.__class__.__name__
+                                          if typ == "MonoBehaviour":
+                                              sp = getattr(co, "m_Script", None)
+                                              try:
+                                                  sd = sp.read()
+                                                  typ = "MonoBehaviour:" + str(getattr(sd, "m_ClassName", "") or "unknown")
+                                              except Exception: typ = "MonoBehaviour"
+                                      except Exception: pass
+                                      go["components"].append({"path_id": pid, "type": typ})
+                                      component_names[int(obj.path_id)].append(typ)
+                                  gameobjects[int(obj.path_id)] = go
+                              elif obj.type.name == "Transform":
+                                  father = getattr(data, "m_Father", None)
+                                  children = getattr(data, "m_Children", []) or []
+                                  transforms[int(obj.path_id)] = {
+                                      "game_object": pointer_id(getattr(data, "m_GameObject", None)),
+                                      "parent_transform": pointer_id(father),
+                                      "children": [pointer_id(c) for c in children]
+                                  }
+                          except Exception: continue
+                      transform_to_go = {tid: t["game_object"] for tid, t in transforms.items()}
+                      parent_go = {}
+                      children_go = collections.defaultdict(list)
+                      for tid, t in transforms.items():
+                          gid = t["game_object"]
+                          pid = transform_to_go.get(t["parent_transform"], 0)
+                          if gid in gameobjects:
+                              parent_go[gid] = pid if pid in gameobjects else 0
+                              if pid in gameobjects: children_go[pid].append(gid)
+                      roots = [gid for gid in gameobjects if parent_go.get(gid, 0) == 0]
+                      def node(gid, depth=0, seen=None):
+                          if seen is None: seen = set()
+                          if gid in seen: return {"name": gameobjects[gid]["name"], "cycle": True}
+                          seen = set(seen); seen.add(gid)
+                          g = gameobjects[gid]
+                          n = {"name": g["name"], "path_id": gid, "components": g["components"]}
+                          if depth < 10:
+                              n["children"] = [node(c, depth + 1, seen) for c in children_go.get(gid, [])[:300]]
+                          elif children_go.get(gid): n["children_truncated"] = len(children_go[gid])
+                          return n
+                      hier = [node(gid) for gid in roots[:20000]]
+                      type_counts = collections.Counter(o.type.name for o in objects)
+                      cr = {"path": path.relative_to(root).as_posix(), "object_count": len(objects), "gameobjects": len(gameobjects), "roots": len(roots), "types": dict(type_counts), "hierarchy": hier}
+                      vr["containers"].append(cr)
+                      print(f"v{vi} {cr['path']}: {cr['object_count']} objects, {cr['gameobjects']} GameObjects, {cr['roots']} roots")
+                  except Exception as e:
+                      vr["errors"].append({"path": path.relative_to(root).as_posix(), "error": type(e).__name__, "message": str(e)[:200]})
+              result["versions"].append(vr)
+          (outdir / "scene-hierarchy.json").write_text(json.dumps(result, indent=2))
+          lines = ["# TABZ serialized scene hierarchy", "", "Recovered GameObject/Transform relationships and attached component type names where UnityPy could resolve them.", ""]
+          for v in result["versions"]:
+              lines += ["## " + v["version"], ""]
+              for c in v["containers"]:
+                  lines += [f"### {c['path']}", "", f"- Objects: {c['object_count']}", f"- GameObjects: {c['gameobjects']}", f"- Root objects: {c['roots']}", "", "Largest/most common component types:", ""]
+                  lines += [f"- {k}: {n}" for k,n in sorted(c["types"].items(), key=lambda x:-x[1])[:20]]
+                  lines += [""]
+              lines += [f"Container errors: {len(v['errors'])}", ""]
+          (outdir / "SCENE-HIERARCHY.md").write_text("\n".join(lines))
+          print("\n".join(lines))
+          PY
+      - name: Add report to Actions summary
+        if: always()
+        run: '[ ! -f reports/SCENE-HIERARCHY.md ] || cat reports/SCENE-HIERARCHY.md >> "$GITHUB_STEP_SUMMARY"'
+      - name: Upload scene hierarchy reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-scene-hierarchy
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
