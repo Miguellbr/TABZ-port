@@ -1,0 +1,159 @@
+name: TABZ rig hierarchy and deduplicated character analysis
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/character-rig-analysis.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Unity asset parsers
+        run: python -m pip install --upgrade gdown py7zr UnityPy
+      - name: Download and extract both original builds
+        run: |
+          mkdir -p downloads extracted output
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archives=[p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip",".7z"}]
+          if len(archives)!=2: raise SystemExit(f"Expected 2 archives, found {len(archives)}: {[p.name for p in archives]}")
+          archives.sort(key=lambda p:(0 if "v4" in p.name.lower() else 1 if "5.1" in p.name.lower() or "v5" in p.name.lower() else 2,p.name.lower()))
+          for i,a in enumerate(archives,1):
+            dest=pathlib.Path("extracted")/f"version-{i}"; dest.mkdir(parents=True,exist_ok=True)
+            if a.suffix.lower()==".zip":
+              with zipfile.ZipFile(a) as z:
+                for n in z.namelist():
+                  q=pathlib.PurePosixPath(n.replace("\\\\","/"))
+                  if q.is_absolute() or ".." in q.parts: raise RuntimeError(f"Unsafe archive path: {n}")
+                z.extractall(dest)
+            else:
+              with py7zr.SevenZipFile(a) as z:
+                for n in z.getnames():
+                  q=pathlib.PurePosixPath(n.replace("\\\\","/"))
+                  if q.is_absolute() or ".." in q.parts: raise RuntimeError(f"Unsafe archive path: {n}")
+                z.extractall(path=dest)
+            print(f"Extracted {a.name}")
+          PY
+      - name: Resolve bone names, rig hierarchy and unique meshes
+        run: |
+          python - <<'PY'
+          import json, pathlib, collections, hashlib
+          import UnityPy
+          out=pathlib.Path("output"); out.mkdir(exist_ok=True)
+          valid={".assets",".bundle",".unity3d",".assetbundle",".ress",".resource"}
+          result={"versions":{},"notes":[
+            "Transform bone names are resolved through Transform.m_GameObject.",
+            "Mesh previews are deduplicated by container and Mesh path ID; OBJ is static geometry only.",
+            "A serialized reference being resolved does not guarantee it is a complete playable prefab."
+          ]}
+          def resolve(p):
+            try: return p.read() if p is not None and hasattr(p,"read") else None
+            except Exception: return None
+          def nm(o):
+            try:
+              v=getattr(o,"m_Name","")
+              return str(v or "")
+            except Exception: return ""
+          def meta(p):
+            if p is None: return None
+            d={}
+            for k in ("file_id","path_id"):
+              try: d[k]=int(getattr(p,k))
+              except Exception: pass
+            o=resolve(p)
+            if o is not None:
+              d["type"]=type(o).__name__
+              n=nm(o)
+              if n: d["name"]=n
+              if type(o).__name__=="Transform":
+                go=resolve(getattr(o,"m_GameObject",None))
+                if go is not None and nm(go): d["game_object"]=nm(go)
+            return d
+          def transform_name(p):
+            t=resolve(p)
+            if t is None: return {"path_id":getattr(p,"path_id",None),"name":"","game_object":""}
+            go=resolve(getattr(t,"m_GameObject",None))
+            return {"path_id":getattr(p,"path_id",None),"name":nm(t),"game_object":nm(go) if go else ""}
+          for vi in (1,2):
+            root=pathlib.Path(f"extracted/version-{vi}")
+            files=[p for p in root.rglob("*") if p.is_file() and (p.suffix.lower() in valid or p.name.lower() in {"globalgamemanagers","level0","level1","level2","level3"})]
+            stats=collections.Counter(); errors=[]; renderers=[]; animators=[]; clips=[]; unique_meshes={}
+            for path in files:
+              try: env=UnityPy.load(str(path))
+              except Exception as e:
+                errors.append({"container":str(path.relative_to(root)),"error":type(e).__name__}); continue
+              container=path.relative_to(root).as_posix()
+              for obj in env.objects:
+                typ=obj.type.name; stats[typ]+=1
+                if typ not in {"SkinnedMeshRenderer","Animator","AnimationClip","Mesh","GameObject","Transform"}: continue
+                try: d=obj.read()
+                except Exception: continue
+                if typ=="SkinnedMeshRenderer":
+                  mp=getattr(d,"m_Mesh",None); mesh=resolve(mp)
+                  bones=[transform_name(bp) for bp in (getattr(d,"m_Bones",None) or [])]
+                  rootbone=transform_name(getattr(d,"m_RootBone",None))
+                  mats=[meta(x) for x in (getattr(d,"m_Materials",None) or [])]
+                  row={"container":container,"renderer_path_id":int(obj.path_id),"renderer_name":nm(d),
+                       "mesh":meta(mp),"root_bone":rootbone,"bone_count":len(bones),"bones":bones,"materials":mats}
+                  if mesh is not None:
+                    key=f"{container}::{getattr(mp,'path_id','unknown')}"
+                    row["mesh_key"]=key
+                    if key not in unique_meshes:
+                      safe="".join(c if c.isalnum() or c in "._-" else "_" for c in (nm(mesh) or "mesh"))[:55]
+                      dest=out/f"v{vi}"/"unique-meshes"; dest.mkdir(parents=True,exist_ok=True)
+                      filename=f"{getattr(mp,'path_id','mesh')}_{safe}.obj"
+                      try:
+                        text=mesh.export()
+                        (dest/filename).write_text(text,encoding="utf-8")
+                        unique_meshes[key]={"container":container,"path_id":getattr(mp,"path_id",None),"name":nm(mesh),"obj":f"v{vi}/unique-meshes/{filename}","sha256":hashlib.sha256(text.encode()).hexdigest(),"vertex_count":len(getattr(mesh,"vertices",[]) or []),"submesh_count":len(getattr(mesh,"m_SubMeshes",[]) or [])}
+                      except Exception as e:
+                        unique_meshes[key]={"container":container,"path_id":getattr(mp,"path_id",None),"name":nm(mesh),"export_error":type(e).__name__+": "+str(e)[:120]}
+                  renderers.append(row)
+                elif typ=="Animator":
+                  animators.append({"container":container,"path_id":int(obj.path_id),"name":nm(d),"avatar":meta(getattr(d,"m_Avatar",None)),"controller":meta(getattr(d,"m_Controller",None)),"root_motion":getattr(d,"m_ApplyRootMotion",None)})
+                elif typ=="AnimationClip":
+                  clips.append({"container":container,"path_id":int(obj.path_id),"name":nm(d),"legacy":getattr(d,"m_Legacy",None)})
+            result["versions"][f"version-{vi}"]={"containers_scanned":len(files),"object_type_counts":dict(stats),"skinned_renderers":renderers,"animators":animators,"animation_clips":clips,"unique_meshes":list(unique_meshes.values()),"parse_errors":errors}
+            print(f"v{vi}: {len(renderers)} renderers, {len(unique_meshes)} unique mesh refs, {len(animators)} animators, {len(clips)} clips, {len(errors)} parse errors")
+          (out/"rig-hierarchy-analysis.json").write_text(json.dumps(result,separators=(",",":"),default=str))
+          md=["# TABZ rig hierarchy and unique mesh analysis","","This report resolves each bone Transform through its GameObject, records Animator/Avatar/controller references, and exports one OBJ per unique mesh reference. OBJ does not preserve rigging, weights, or animation.",""]
+          for version,d in result["versions"].items():
+            md += [f"## {version}","",f"- Containers scanned: {d['containers_scanned']}",f"- Skinned renderers: {len(d['skinned_renderers'])}",f"- Unique mesh references: {len(d['unique_meshes'])}",f"- Animators: {len(d['animators'])}",f"- Animation clips: {len(d['animation_clips'])}",f"- Parse errors: {len(d['parse_errors'])}","","### Renderers with resolved bone names",""]
+            for r in d["skinned_renderers"]:
+              named=[b["game_object"] or b["name"] for b in r["bones"] if b.get("game_object") or b.get("name")]
+              mesh=r.get("mesh") or {}
+              if named or r.get("renderer_name") or mesh.get("name"):
+                md.append(f"- **{r.get('renderer_name') or '(unnamed renderer)'}** — mesh: {mesh.get('name','?')} (path {mesh.get('path_id','?')}), root: {r.get('root_bone',{}).get('game_object','')}, bones: {len(named)}/{r['bone_count']}; container: {r['container']}")
+                if named: md.append("  - Bone names: "+", ".join(named[:40])+(" …" if len(named)>40 else ""))
+            md += ["","### Unique meshes",""]
+            for m in d["unique_meshes"]:
+              md.append(f"- {m.get('name') or '(unnamed)'} — {m.get('vertex_count','?')} vertices; {m.get('obj',m.get('export_error','no preview'))}")
+            md += ["","### Animation clips",""]
+            md += [f"- {c['name'] or '(unnamed)'} — {c['container']}, path ID {c['path_id']}" for c in d["animation_clips"][:150]]
+            md.append("")
+          (out/"RIG-HIERARCHY-ANALYSIS.md").write_text("\n".join(md))
+          print("Created rig-hierarchy-analysis.json and RIG-HIERARCHY-ANALYSIS.md")
+          PY
+      - name: Publish report
+        if: always()
+        run: |
+          [ ! -f output/RIG-HIERARCHY-ANALYSIS.md ] || cat output/RIG-HIERARCHY-ANALYSIS.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload rig analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-rig-hierarchy-analysis
+          path: output/
+          if-no-files-found: warn
+          retention-days: 14
