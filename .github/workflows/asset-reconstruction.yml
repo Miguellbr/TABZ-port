@@ -122,6 +122,18 @@ jobs:
                                           export_counts[(vi, "Mesh")] += 1
                                       except Exception as e:
                                           item["export_error"] = type(e).__name__ + ": " + str(e)[:120]
+                              elif typ in {"MeshRenderer", "SkinnedMeshRenderer"}:
+                                  # Follow renderer references to associated meshes/materials/textures where supported.
+                                  if export_counts[(vi, typ)] < 150:
+                                      try:
+                                          container_slug = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in path.relative_to(root).as_posix())[:140]
+                                          outdir = exports / f"v{vi}" / "renderers" / f"{container_slug}_{obj.path_id}"
+                                          outdir.mkdir(parents=True, exist_ok=True)
+                                          data.export(str(outdir))
+                                          item["renderer_export_dir"] = outdir.as_posix()
+                                          export_counts[(vi, typ)] += 1
+                                      except Exception as e:
+                                          item["export_error"] = type(e).__name__ + ": " + str(e)[:120]
                               elif typ in {"MonoScript", "GameObject", "Transform", "Material", "Shader", "AnimationClip", "AnimatorController", "PrefabInstance", "SceneAsset"}:
                                   if typ == "MonoScript":
                                       item["class_name"] = str(getattr(data, "m_ClassName", "") or "")
