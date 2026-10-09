@@ -200,6 +200,14 @@ jobs:
           (base / "COMPARISON.md").write_text("\n".join(lines), encoding="utf-8")
           print(f"Comparison created: {len(only_a)} unique to v1, {len(only_b)} unique to v2, {len(changed)} changed.")
           PY
+      - name: Upload extracted game folders (temporary, not committed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-extracted-two-versions
+          path: extracted/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 1
       - name: Upload metadata reports only
         uses: actions/upload-artifact@v4
         with:
