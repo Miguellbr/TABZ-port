@@ -1,0 +1,98 @@
+name: TABZ gameplay prerequisites audit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/gameplay-prerequisites.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install extraction tools
+        run: |
+          python -m pip install --upgrade gdown py7zr
+          dotnet tool install ilspycmd --tool-path "$HOME/.dotnet/tools"
+      - name: Download and extract original builds
+        run: |
+          mkdir -p downloads extracted audit
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archives = sorted((p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"}), key=lambda p:p.name.casefold())
+          if len(archives) != 2:
+              raise SystemExit(f"Expected 2 archives, found {len(archives)}")
+          for i, archive in enumerate(archives, 1):
+              out = pathlib.Path("extracted") / f"version-{i}"
+              out.mkdir(parents=True, exist_ok=True)
+              def safe(name):
+                  rel = pathlib.PurePosixPath(name.replace("\\", "/"))
+                  if rel.is_absolute() or ".." in rel.parts:
+                      raise RuntimeError(f"Unsafe archive path: {name}")
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as z:
+                      for item in z.infolist(): safe(item.filename)
+                      z.extractall(out)
+              else:
+                  with py7zr.SevenZipFile(archive) as z:
+                      for name in z.getnames(): safe(name)
+                      z.extractall(path=out)
+              print(f"Extracted {archive.name} -> {out}")
+          PY
+      - name: Decompile source and extract gameplay classes
+        run: |
+          set -euo pipefail
+          for version in version-1 version-2; do
+            dll=$(find "extracted/$version" -type f \( -iname 'Assembly-CSharp.dll' -o -iname 'Assembly-Csharp.dll' \) -print -quit)
+            if [ -z "$dll" ]; then echo "::warning::No Assembly-CSharp found in $version"; continue; fi
+            mkdir -p "audit/$version/source"
+            "$HOME/.dotnet/tools/ilspycmd" -o "audit/$version/source" "$dll"
+          done
+          python - <<'PY'
+          import pathlib, re, json
+          root = pathlib.Path("audit")
+          wanted = re.compile(r"(Weapon|PlayerHandler|MovementHandler|CameraMovement|PlayerInteraction|WorldItemAdder|SpawnPointManager|Zombie|Zombi|AI|Behavior|ItemSpawn|Item|Inventory|NetworkManager|NetworkPlayer|Photon)", re.I)
+          keyword = re.compile(r"PhotonNetwork|PhotonView|RPC|Input\\.Get|KeyCode|Instantiate\\(|Resources\\.Load|NavMesh|BehaviourTree|FMOD|Steam|Spawn|Pick.?up|Reload|Fire\\(", re.I)
+          report = ["# TABZ gameplay prerequisites audit", "",
+                    "Static audit of the decompiled managed assemblies. This report identifies what must be preserved or replaced for an offline Android vertical slice; it does not claim the code is already buildable.", ""]
+          index = []
+          for version in sorted(root.iterdir()):
+              if not version.is_dir(): continue
+              files = sorted((version / "source").rglob("*.cs"))
+              report += [f"## {version.name}", "", f"Decompiled source files: {len(files)}", ""]
+              for f in files:
+                  txt = f.read_text(errors="ignore")
+                  classes = re.findall(r"\\bclass\\s+([A-Za-z_][A-Za-z0-9_]*)", txt)
+                  if not wanted.search(f.stem) and not any(wanted.search(c) for c in classes):
+                      continue
+                  hits = [(i, line.strip()) for i,line in enumerate(txt.splitlines(),1) if keyword.search(line)]
+                  record = {"version":version.name, "file":f.relative_to(version).as_posix(), "classes":classes, "keyword_hits":len(hits)}
+                  index.append(record)
+                  report += [f"### {f.stem}", "", f"File: {f.relative_to(version).as_posix()}", f"Classes: {', '.join(classes) if classes else '(not parsed)'}", f"Relevant-line hits: {len(hits)}", ""]
+                  report += [f"- L{n}: {line[:220]}" for n,line in hits[:30]]
+                  report += [""]
+          (root / "GAMEPLAY-PREREQUISITES.md").write_text("\\n".join(report))
+          (root / "gameplay-class-index.json").write_text(json.dumps(index, indent=2))
+          print("\\n".join(report[:120]))
+          PY
+      - name: Summarize audit
+        if: always()
+        run: '[ ! -f audit/GAMEPLAY-PREREQUISITES.md ] || cat audit/GAMEPLAY-PREREQUISITES.md >> "$GITHUB_STEP_SUMMARY"'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabz-gameplay-prerequisites
+          path: audit/
+          if-no-files-found: error
+          retention-days: 14
