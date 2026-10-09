@@ -1,0 +1,91 @@
+name: Recover TABZ gameplay source for Android port
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/recover-gameplay-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade gdown py7zr
+          dotnet tool install ilspycmd --tool-path "$HOME/.dotnet/tools"
+      - name: Download and extract original builds
+        run: |
+          mkdir -p downloads extracted source-recovery
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archives = sorted((p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"}), key=lambda p:p.name.casefold())
+          if len(archives) != 2:
+              raise SystemExit(f"Expected 2 original archives, found {len(archives)}")
+          for i, archive in enumerate(archives, 1):
+              out = pathlib.Path("extracted") / f"version-{i}"
+              out.mkdir(parents=True, exist_ok=True)
+              def safe(name):
+                  rel = pathlib.PurePosixPath(name.replace("\\", "/"))
+                  if rel.is_absolute() or ".." in rel.parts:
+                      raise RuntimeError(f"Unsafe archive path: {name}")
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as z:
+                      for item in z.infolist(): safe(item.filename)
+                      z.extractall(out)
+              else:
+                  with py7zr.SevenZipFile(archive) as z:
+                      for name in z.getnames(): safe(name)
+                      z.extractall(path=out)
+              print(f"Extracted {archive.name} -> {out}")
+          PY
+      - name: Decompile managed gameplay assemblies
+        run: |
+          set -euo pipefail
+          for version in version-1 version-2; do
+            dll=$(find "extracted/$version" -type f \( -iname 'Assembly-CSharp.dll' -o -iname 'Assembly-Csharp.dll' \) -print -quit)
+            if [ -z "$dll" ]; then echo "::warning::No Assembly-CSharp found in $version"; continue; fi
+            mkdir -p "source-recovery/$version"
+            "$HOME/.dotnet/tools/ilspycmd" -o "source-recovery/$version" "$dll"
+          done
+      - name: Generate mobile-port entry point report
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          root = pathlib.Path("source-recovery")
+          keywords = re.compile(r"Input\\.Get(Key|Axis|Button)|KeyCode|MouseLook|MovementHandler|CharacterController|Rigidbody|PhotonNetwork|PhotonView|SteamAPI|Steamworks|FMOD|class .*Player|class .*Weapon|class .*Zombie|class .*Menu|class .*Interaction", re.I)
+          lines = ["# TABZ managed source recovery", "", "Recovered from the supplied Windows builds with ILSpy. This is a static source recovery, not yet an Android-ready Unity project.", ""]
+          for version in sorted(root.iterdir()):
+              if not version.is_dir(): continue
+              files = sorted(version.rglob("*.cs"))
+              lines += [f"## {version.name}", "", f"- Decompiled C# files: {len(files)}"]
+              matches = []
+              for file in files:
+                  text = file.read_text(errors="ignore")
+                  for number, line in enumerate(text.splitlines(), 1):
+                      if keywords.search(line):
+                          matches.append(f"- `{file.relative_to(version).as_posix()}:{number}` — `{line.strip()[:180]}`")
+              lines += ["", "### Candidate input, player, AI, menu and platform integration points", ""]
+              lines += matches[:500] or ["No keyword matches found."]
+              lines += [""]
+          pathlib.Path("source-recovery/RECOVERY-REPORT.md").write_text("\n".join(lines))
+          print("\n".join(lines[:100]))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabz-managed-source-recovery
+          path: source-recovery/
+          if-no-files-found: error
+          retention-days: 14
