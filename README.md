@@ -1,32 +1,37 @@
 # TABZ Android Port — research project
 
-This repository is for investigating whether **Totally Accurate Battle Zombielator (TABZ)** can be adapted to Android.
+This repository investigates whether Totally Accurate Battle Zombielator (TABZ) can be adapted to Android.
 
 ## Current stage
 
-**Stage 1: inspect the community-modified builds.** The workflow attempts to download the public ZIPs linked from the community folder, extracts them temporarily in a GitHub Actions runner, and publishes a file inventory as an artifact. The game files themselves are **not committed or redistributed** by this repository.
+Stage 1: inspect and compare the two community-modified ZIP builds linked from the public Google Drive folder. The workflow downloads them to a temporary GitHub Actions runner, extracts each version into its own directory, and creates separate inventories plus a comparison report.
 
-Source folder: [TABZ modded builds public](https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link)
+Source folder: https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link
 
-## Run the inventory
+## Run the analysis
 
-1. Open the **Actions** tab.
-2. Select **Inventory TABZ builds**.
-3. Press **Run workflow** (or wait for the scheduled/manual trigger).
-4. Open the completed run and download the `tabz-inventory` artifact.
+1. Open the Actions tab.
+2. Select Inventory TABZ builds.
+3. Press Run workflow.
+4. Open the completed run and download the tabz-two-version-inventory artifact.
 
-The inventory includes paths, file sizes, extensions, SHA-256 hashes, and a summary of likely engine/build markers. It does not include the original game binaries.
+The artifact contains:
+- source-zips.json: maps version-1 and version-2 to the original ZIP filenames;
+- version-1/ and version-2/: separate file inventories and reports;
+- COMPARISON.md and comparison.json: files present in only one version and same-path files with different content.
+
+Version labels are assigned by alphabetical ZIP filename order. Check source-zips.json to see which original ZIP corresponds to each label.
 
 ## Important limitations
 
-- This workflow depends on the public Google Drive folder remaining accessible and on its download page not changing.
-- A successful inventory is not proof that the game can be ported.
-- Android feasibility depends on the actual engine, Unity version (if applicable), native plugins, architecture, graphics APIs, input handling, and available project/source files.
-- Do not publish copyrighted game files without permission. This repository is intended to store analysis tools and notes, not game assets.
+- The workflow expects exactly two ZIP files. It stops rather than silently mixing files if the Drive folder contents change.
+- Downloads and extracted game files stay in the temporary runner; the original game binaries are not committed or included in the artifact.
+- This inventory is metadata only: paths, sizes, extensions, SHA-256 hashes, and likely engine/build markers.
+- A successful inventory is not proof that the game can be ported. Feasibility depends on the engine/version, native plugins, architecture, graphics APIs, input handling, and whether project/source files exist.
 
 ## Project plan
 
-- [ ] Download and inventory both public ZIP builds
+- [ ] Download and inventory both ZIP builds separately
 - [ ] Identify engine, build target, managed assemblies, native libraries, and assets
 - [ ] Determine whether source/project files exist or only compiled game builds
 - [ ] Evaluate a realistic Android porting route
