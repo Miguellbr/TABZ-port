@@ -1,0 +1,178 @@
+name: TABZ character asset recovery
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/character-recovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Unity asset parsers
+        run: python -m pip install --upgrade gdown py7zr UnityPy
+      - name: Extract both original builds
+        run: |
+          mkdir -p downloads extracted output
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archives = [p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"}]
+          if len(archives) != 2:
+              raise SystemExit(f"Expected two archives, found {len(archives)}: {[p.name for p in archives]}")
+          archives.sort(key=lambda p: (0 if "v4" in p.name.lower() else 1 if "5.1" in p.name.lower() or "v5" in p.name.lower() else 2, p.name.lower()))
+          for i, archive in enumerate(archives, 1):
+              out = pathlib.Path("extracted") / f"version-{i}"
+              out.mkdir(parents=True, exist_ok=True)
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as z:
+                      for e in z.infolist():
+                          p = pathlib.PurePosixPath(e.filename.replace("\\\\", "/"))
+                          if p.is_absolute() or ".." in p.parts: raise RuntimeError(f"Unsafe path: {e.filename}")
+                      z.extractall(out)
+              else:
+                  with py7zr.SevenZipFile(archive) as z:
+                      for name in z.getnames():
+                          p = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                          if p.is_absolute() or ".." in p.parts: raise RuntimeError(f"Unsafe path: {name}")
+                      z.extractall(path=out)
+              print(f"{archive.name} -> {out}")
+          PY
+      - name: Map skinned renderers to meshes, bones, materials and animations
+        run: |
+          python - <<'PY'
+          import json, pathlib, collections
+          import UnityPy
+
+          out = pathlib.Path("output")
+          out.mkdir(exist_ok=True)
+          valid_ext = {".assets", ".bundle", ".unity3d", ".assetbundle", ".ress", ".resource"}
+          result = {"versions": {}, "notes": [
+              "Reference map from serialized Unity assets, not a rebuilt Unity project.",
+              "Bone and material links are recorded where UnityPy can resolve pointers.",
+              "OBJ exports are static previews; OBJ does not preserve skin weights or animation."
+          ]}
+
+          def name_of(value):
+              if value is None: return ""
+              for attr in ("m_Name", "name"):
+                  try:
+                      v = getattr(value, attr, None)
+                      if v: return str(v)
+                  except Exception: pass
+              return ""
+
+          def resolve(ptr):
+              if ptr is None: return None
+              try:
+                  if hasattr(ptr, "read"): return ptr.read()
+              except Exception: pass
+              return None
+
+          def ptr_meta(ptr):
+              if ptr is None: return None
+              d = {}
+              for key in ("file_id", "path_id"):
+                  try: d[key] = int(getattr(ptr, key))
+                  except Exception: pass
+              val = resolve(ptr)
+              if val is not None:
+                  d["name"] = name_of(val)
+                  d["resolved_type"] = type(val).__name__
+              return d
+
+          for vi in (1, 2):
+              root = pathlib.Path(f"extracted/version-{vi}")
+              files = [p for p in root.rglob("*") if p.is_file() and (p.suffix.lower() in valid_ext or p.name.lower() in {"globalgamemanagers", "level0", "level1", "level2", "level3"})]
+              rows = []
+              counts = collections.Counter()
+              errors = []
+              for path in files:
+                  try:
+                      env = UnityPy.load(str(path))
+                  except Exception as e:
+                      errors.append({"container": str(path.relative_to(root)), "error": type(e).__name__})
+                      continue
+                  container = path.relative_to(root).as_posix()
+                  for obj in env.objects:
+                      typ = obj.type.name
+                      counts[typ] += 1
+                      try: data = obj.read()
+                      except Exception: continue
+                      nm = name_of(data)
+                      row = {"container": container, "path_id": int(obj.path_id), "type": typ, "name": nm}
+                      if typ == "SkinnedMeshRenderer":
+                          mesh_ptr = getattr(data, "m_Mesh", None)
+                          mesh = resolve(mesh_ptr)
+                          bones = []
+                          for bp in (getattr(data, "m_Bones", None) or []):
+                              b = resolve(bp)
+                              bones.append({"path_id": getattr(bp, "path_id", None), "name": name_of(b) if b else ""})
+                          materials = [ptr_meta(mp) for mp in (getattr(data, "m_Materials", None) or [])]
+                          row.update({"mesh": ptr_meta(mesh_ptr), "root_bone": ptr_meta(getattr(data, "m_RootBone", None)), "bones": bones, "materials": materials})
+                          if mesh is not None:
+                              row["mesh_vertex_count"] = len(getattr(mesh, "vertices", []) or getattr(mesh, "m_Vertices", []) or [])
+                              row["mesh_submesh_count"] = len(getattr(mesh, "m_SubMeshes", []) or [])
+                              try:
+                                  safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in (nm or "skinned"))[:70]
+                                  dest = out / f"v{vi}" / "meshes"
+                                  dest.mkdir(parents=True, exist_ok=True)
+                                  filename = f"{obj.path_id}_{safe}.obj"
+                                  dest.joinpath(filename).write_text(mesh.export(), encoding="utf-8")
+                                  row["static_preview_obj"] = f"v{vi}/meshes/{filename}"
+                              except Exception as e:
+                                  row["mesh_export_error"] = type(e).__name__ + ": " + str(e)[:100]
+                      elif typ == "MeshFilter":
+                          row["mesh"] = ptr_meta(getattr(data, "m_Mesh", None))
+                      elif typ == "Animator":
+                          row["avatar"] = ptr_meta(getattr(data, "m_Avatar", None))
+                          row["controller"] = ptr_meta(getattr(data, "m_Controller", None))
+                          row["root_motion"] = getattr(data, "m_ApplyRootMotion", None)
+                      elif typ == "AnimationClip":
+                          row["legacy"] = getattr(data, "m_Legacy", None)
+                      elif typ == "GameObject":
+                          row["components"] = []
+                          for cp in (getattr(data, "m_Components", None) or []):
+                              ptr = getattr(cp, "component", None)
+                              row["components"].append(ptr_meta(ptr if ptr is not None else cp))
+                      if typ in {"SkinnedMeshRenderer", "MeshFilter", "Animator", "AnimationClip", "Avatar", "GameObject", "Transform", "Mesh", "Material"}:
+                          rows.append(row)
+              needles = ("player", "human", "bean", "zombie", "robot", "muktar", "construction", "avatar", "skeleton", "anim")
+              for row in rows:
+                  row["character_relevance_score"] = sum(1 for n in needles if n in row.get("name", "").lower())
+              rows.sort(key=lambda r: (-r.get("character_relevance_score", 0), r["type"], r["name"].lower()))
+              result["versions"][f"version-{vi}"] = {"containers_scanned": len(files), "object_type_counts": dict(counts), "relevant_objects": rows, "parse_errors": errors}
+              print(f"version-{vi}: {len(files)} containers, {len(rows)} relevant serialized objects, {counts['SkinnedMeshRenderer']} skinned renderers")
+          (out / "character-reference-map.json").write_text(json.dumps(result, indent=2, default=str))
+          md = ["# TABZ character asset reference map", "", "This artifact links character-related serialized Unity objects where possible. OBJ files are static geometry previews only; they do not retain rigging or animation.", ""]
+          for version, data in result["versions"].items():
+              md += [f"## {version}", "", f"- Containers scanned: {data['containers_scanned']}", f"- SkinnedMeshRenderer objects: {data['object_type_counts'].get('SkinnedMeshRenderer', 0)}", f"- Animator objects: {data['object_type_counts'].get('Animator', 0)}", f"- AnimationClip objects: {data['object_type_counts'].get('AnimationClip', 0)}", f"- Relevant object records: {len(data['relevant_objects'])}", f"- Container parse errors: {len(data['parse_errors'])}", "", "### Character-related records", ""]
+              for r in data["relevant_objects"][:80]:
+                  if r.get("character_relevance_score", 0) or r["type"] == "SkinnedMeshRenderer":
+                      mesh = r.get("mesh") or {}
+                      md.append(f"- **{r['type']}** '{r['name'] or '(unnamed)'}' — container '{r['container']}', path ID '{r['path_id']}', mesh '{mesh.get('name','')}'")
+              md.append("")
+          (out / "CHARACTER-REFERENCE-MAP.md").write_text("\n".join(md))
+          print("Wrote character-reference-map.json and CHARACTER-REFERENCE-MAP.md")
+          PY
+      - name: Publish summary
+        if: always()
+        run: |
+          [ ! -f output/CHARACTER-REFERENCE-MAP.md ] || cat output/CHARACTER-REFERENCE-MAP.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload recovered character map and static mesh previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-character-reference-map
+          path: output/
+          if-no-files-found: warn
+          retention-days: 14
