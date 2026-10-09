@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install download helper
-        run: python -m pip install --upgrade gdown
+        run: python -m pip install --upgrade gdown py7zr
       - name: Download public Drive folder
         run: |
           mkdir -p downloads extracted inventory
@@ -29,29 +29,44 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import pathlib, zipfile, json
+          import pathlib, zipfile, json, tarfile
+          import py7zr
           source = pathlib.Path("downloads")
           target = pathlib.Path("extracted")
-          archives = sorted((p for p in source.rglob("*") if p.is_file() and p.suffix.lower() == ".zip"), key=lambda p: p.name.casefold())
+          supported = {".zip", ".7z"}
+          archives = sorted((p for p in source.rglob("*") if p.is_file() and p.suffix.lower() in supported), key=lambda p: p.name.casefold())
           if len(archives) != 2:
-              print("Expected exactly 2 ZIPs for two distinct TABZ versions; found:", len(archives))
+              print("Expected exactly 2 archives (.zip or .7z) for two distinct TABZ versions; found:", len(archives))
               for p in source.rglob("*"):
                   if p.is_file():
                       print(f"{p} ({p.stat().st_size} bytes)")
               raise SystemExit("Stopping to avoid mixing versions.")
+          def validate_member(out, name):
+              # Reject absolute paths, parent traversal, and Windows-style traversal.
+              normalized = name.replace("\\", "/")
+              rel = pathlib.PurePosixPath(normalized)
+              if rel.is_absolute() or any(part == ".." for part in rel.parts):
+                  raise RuntimeError(f"Unsafe archive path: {name}")
+              root = out.resolve()
+              destination = (out / pathlib.Path(*rel.parts)).resolve()
+              if destination != root and root not in destination.parents:
+                  raise RuntimeError(f"Unsafe archive path: {name}")
           source_info = []
           for index, archive in enumerate(archives, 1):
               version = f"version-{index}"
               out = target / version
               out.mkdir(parents=True, exist_ok=True)
-              with zipfile.ZipFile(archive) as zf:
-                  root = out.resolve()
-                  for member in zf.infolist():
-                      destination = (out / member.filename).resolve()
-                      if destination != root and root not in destination.parents:
-                          raise RuntimeError(f"Unsafe path in ZIP {archive.name}: {member.filename}")
-                  zf.extractall(out)
-              source_info.append({"version": version, "source_zip": archive.name, "source_size_bytes": archive.stat().st_size})
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as zf:
+                      for member in zf.infolist():
+                          validate_member(out, member.filename)
+                      zf.extractall(out)
+              elif archive.suffix.lower() == ".7z":
+                  with py7zr.SevenZipFile(archive, mode="r") as zf:
+                      for member in zf.getnames():
+                          validate_member(out, member)
+                      zf.extractall(path=out)
+              source_info.append({"version": version, "source_archive": archive.name, "archive_format": archive.suffix.lower().lstrip("."), "source_size_bytes": archive.stat().st_size})
               print(f"{archive.name} -> {out}")
           pathlib.Path("inventory/source-zips.json").write_text(json.dumps(source_info, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
           PY
