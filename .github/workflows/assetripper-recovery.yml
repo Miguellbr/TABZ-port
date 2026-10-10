@@ -73,8 +73,8 @@ jobs:
           mkdir -p /tmp/assetripper
           unzip -q /tmp/assetripper.zip -d /tmp/assetripper
           echo "Files included in AssetRipper package:"
-          find /tmp/assetripper -maxdepth 4 -type f -printf '%p (%s bytes)\\n' | head -80
-          BIN="$(find /tmp/assetripper -type f \\( -iname 'AssetRipper' -o -iname 'AssetRipperCLI' -o -iname 'assetripper' -o -iname 'AssetRipperCLI.exe' \\) | head -n 1)"
+          find /tmp/assetripper -maxdepth 4 -type f -printf '%p (%s bytes)\n' | head -80
+          BIN="$(find /tmp/assetripper -type f | grep -Ei '/(AssetRipper|AssetRipperCLI|assetripper|AssetRipperCLI[.]exe)$' | head -n 1)"
           if [ -z "$BIN" ]; then
             echo "::error::Could not find AssetRipper executable in downloaded archive"
             exit 1
@@ -84,7 +84,7 @@ jobs:
           "$BIN" --help
       - name: Recover Unity project or primary assets
         run: |
-          /tmp/assetripper/AssetRipper --cli \
+          "$ASSET_RIPPER_BIN" --cli \
             --input "$GITHUB_WORKSPACE/extracted/game" \
             --output "$GITHUB_WORKSPACE/output/${{ inputs.build }}" \
             --mode "${{ inputs.mode }}" \
