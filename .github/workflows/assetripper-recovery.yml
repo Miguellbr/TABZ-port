@@ -99,7 +99,7 @@ jobs:
             --input "$GITHUB_WORKSPACE/extracted/game" \
             --output "$GITHUB_WORKSPACE/output/${{ inputs.build }}" \
             --mode "${{ inputs.mode }}" \
-            --script-content-level Level0 \
+            --script-content-level Level2 \
             --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
 
       - name: Summarize recovered content
