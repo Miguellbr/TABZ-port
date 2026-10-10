@@ -38,7 +38,7 @@ jobs:
               out = pathlib.Path("extracted") / f"version-{i}"
               out.mkdir(parents=True, exist_ok=True)
               def safe(name):
-                  rel = pathlib.PurePosixPath(name.replace("\\", "/"))
+                  rel = pathlib.PurePosixPath(name.replace(chr(92), "/"))
                   if rel.is_absolute() or ".." in rel.parts:
                       raise RuntimeError(f"Unsafe archive path: {name}")
               if archive.suffix.lower() == ".zip":
@@ -55,7 +55,8 @@ jobs:
         run: |
           set -euo pipefail
           for version in version-1 version-2; do
-            dll=$(find "extracted/$version" -type f \( -iname 'Assembly-CSharp.dll' -o -iname 'Assembly-Csharp.dll' \) -print -quit)
+            dll=$(find "extracted/$version" -type f -iname 'Assembly-CSharp.dll' -print -quit)
+            if [ -z "$dll" ]; then dll=$(find "extracted/$version" -type f -iname 'Assembly-Csharp.dll' -print -quit); fi
             if [ -z "$dll" ]; then echo "::warning::No Assembly-CSharp found in $version"; continue; fi
             mkdir -p "audit/$version/source"
             "$HOME/.dotnet/tools/ilspycmd" -o "audit/$version/source" "$dll"
@@ -63,10 +64,10 @@ jobs:
           python - <<'PY'
           import pathlib, re, json
           root = pathlib.Path("audit")
-          wanted = re.compile(r"(Weapon|PlayerHandler|MovementHandler|CameraMovement|PlayerInteraction|WorldItemAdder|SpawnPointManager|Zombie|Zombi|AI|Behavior|ItemSpawn|Item|Inventory|NetworkManager|NetworkPlayer|Photon)", re.I)
-          keyword = re.compile(r"PhotonNetwork|PhotonView|RPC|Input\\.Get|KeyCode|Instantiate\\(|Resources\\.Load|NavMesh|BehaviourTree|FMOD|Steam|Spawn|Pick.?up|Reload|Fire\\(", re.I)
+          wanted = re.compile("Weapon|PlayerHandler|MovementHandler|CameraMovement|PlayerInteraction|WorldItemAdder|SpawnPointManager|Zombie|Zombi|AI|Behavior|ItemSpawn|Item|Inventory|NetworkManager|NetworkPlayer|Photon", re.I)
+          keyword = re.compile("PhotonNetwork|PhotonView|RPC|Input.Get|KeyCode|Instantiate|Resources.Load|NavMesh|BehaviourTree|FMOD|Steam|Spawn|Pick.?up|Reload|Fire", re.I)
           report = ["# TABZ gameplay prerequisites audit", "",
-                    "Static audit of the decompiled managed assemblies. This report identifies what must be preserved or replaced for an offline Android vertical slice; it does not claim the code is already buildable.", ""]
+                    "Static audit of the decompiled managed assemblies. This identifies prerequisites for an offline Android vertical slice; it does not claim the recovered code is already buildable.", ""]
           index = []
           for version in sorted(root.iterdir()):
               if not version.is_dir(): continue
@@ -74,18 +75,17 @@ jobs:
               report += [f"## {version.name}", "", f"Decompiled source files: {len(files)}", ""]
               for f in files:
                   txt = f.read_text(errors="ignore")
-                  classes = re.findall(r"\\bclass\\s+([A-Za-z_][A-Za-z0-9_]*)", txt)
+                  classes = [m.group(1) for m in re.finditer("class +([A-Za-z_][A-Za-z0-9_]*)", txt)]
                   if not wanted.search(f.stem) and not any(wanted.search(c) for c in classes):
                       continue
                   hits = [(i, line.strip()) for i,line in enumerate(txt.splitlines(),1) if keyword.search(line)]
-                  record = {"version":version.name, "file":f.relative_to(version).as_posix(), "classes":classes, "keyword_hits":len(hits)}
-                  index.append(record)
+                  index.append({"version":version.name, "file":f.relative_to(version).as_posix(), "classes":classes, "keyword_hits":len(hits)})
                   report += [f"### {f.stem}", "", f"File: {f.relative_to(version).as_posix()}", f"Classes: {', '.join(classes) if classes else '(not parsed)'}", f"Relevant-line hits: {len(hits)}", ""]
                   report += [f"- L{n}: {line[:220]}" for n,line in hits[:30]]
                   report += [""]
-          (root / "GAMEPLAY-PREREQUISITES.md").write_text("\\n".join(report))
+          (root / "GAMEPLAY-PREREQUISITES.md").write_text(chr(10).join(report))
           (root / "gameplay-class-index.json").write_text(json.dumps(index, indent=2))
-          print("\\n".join(report[:120]))
+          print(chr(10).join(report[:120]))
           PY
       - name: Summarize audit
         if: always()
