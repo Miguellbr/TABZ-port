@@ -10,16 +10,18 @@ Last source audit: 2026-10-10. Baseline: recovered TABZ v5.1 managed assembly.
 - Extended the runtime touch HUD with INV and six hotbar buttons.
 - Added `MobileInventoryBridge`, which calls the original `UIInventory.ToggleOpen` and hotbar-selection method through reflection so the original UI/InventoryService remains the source of truth.
 - Fixed the touch HUD bootstrap so an existing original Canvas does not prevent the mobile HUD from being created.
-- Added the first-prototype source audit and acceptance criteria.
+- Added an isolated offline prototype scaffold: runtime ground/player/camera, touch HUD, hitscan rifle with ammo/reload, a damageable chasing zombie, a respawn button and a toggleable placeholder inventory panel.
+- Added automated source-contract checks; GitHub Actions run `38007971246` passed.
+- Added setup instructions in `MobilePort/OFFLINE-PROTOTYPE-README.md`.
 
 ## Not yet done / do not treat as working
 
-- No Unity project has been reconstructed/imported and no Android APK has been compiled.
+- No complete Unity project has been reconstructed/imported and no Android APK has been compiled. The offline sandbox is source code that must still be compiled and run by Unity.
 - The inventory bridge is not device-tested. It expects the recovered v5.1 private members `ToggleOpen`, `UpdateHotbarSelection`, and `m_selectedHotbarIndex`.
 - Touch state is not yet consumed by the original `PlayerHandler`, `CameraMovement`, `Weapon`, or `PlayerInteraction` classes.
 - Original item/zombie prefabs have not yet been proven to instantiate without Photon.
 - The original inventory's test-item spawn path uses `PhotonNetwork.Instantiate` and must be disabled in offline mode.
-- The current UI touch HUD and spawn menu are scaffolding, not a playable port.
+- The offline sandbox is a test harness, not yet a playable TABZ port. Its weapon/zombie/inventory visuals are placeholders; the original inventory bridge is separate and untested.
 
 ## Next implementation steps
 
