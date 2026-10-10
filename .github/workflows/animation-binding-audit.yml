@@ -1,0 +1,135 @@
+name: TABZ animation binding audit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/animation-binding-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install extraction tools
+        run: python -m pip install --upgrade gdown py7zr UnityPy
+      - name: Download and extract original builds
+        run: |
+          mkdir -p downloads extracted output
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          files = [p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"}]
+          if len(files) != 2:
+              raise SystemExit(f"Expected two archives, found {len(files)}")
+          files.sort(key=lambda p: (0 if "v4" in p.name.lower() else 1 if "5.1" in p.name.lower() or "v5" in p.name.lower() else 2, p.name.lower()))
+          for i, archive in enumerate(files, 1):
+              dest = pathlib.Path("extracted") / f"v{i}"
+              dest.mkdir(parents=True, exist_ok=True)
+              if archive.suffix.lower() == ".zip":
+                  with zipfile.ZipFile(archive) as z:
+                      for item in z.infolist():
+                          rel = pathlib.PurePosixPath(item.filename.replace("\\\\", "/"))
+                          if rel.is_absolute() or ".." in rel.parts: raise RuntimeError("Unsafe archive path")
+                      z.extractall(dest)
+              else:
+                  with py7zr.SevenZipFile(archive) as z:
+                      for name in z.getnames():
+                          rel = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                          if rel.is_absolute() or ".." in rel.parts: raise RuntimeError("Unsafe archive path")
+                      z.extractall(path=dest)
+          PY
+      - name: Audit clips, animation bindings and skinned meshes
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          import UnityPy
+          out = pathlib.Path("output")
+          valid = {".assets", ".bundle", ".unity3d", ".assetbundle", ".ress", ".resource"}
+          report = {"note": "Static serialized-asset audit only; this does not prove clips can be played by a specific rig.", "versions": {}}
+          for vi in (1, 2):
+              root = pathlib.Path(f"extracted/v{vi}")
+              files = [p for p in root.rglob("*") if p.is_file() and (p.suffix.lower() in valid or p.name.lower() in {"globalgamemanagers", "level0", "level1", "level2", "level3"})]
+              clips, rigs, avatars, errors = [], [], [], []
+              for path in files:
+                  try: env = UnityPy.load(str(path))
+                  except Exception as exc:
+                      errors.append({"container": str(path.relative_to(root)), "error": type(exc).__name__})
+                      continue
+                  container = path.relative_to(root).as_posix()
+                  for obj in env.objects:
+                      try: data = obj.read()
+                      except Exception: continue
+                      typ = obj.type.name
+                      name = str(getattr(data, "m_Name", "") or "")
+                      if typ == "AnimationClip":
+                          row = {"name": name, "path_id": int(obj.path_id), "container": container, "bindings": []}
+                          for field in ("m_FloatCurves", "m_PPtrCurves", "m_PositionCurves", "m_RotationCurves", "m_ScaleCurves", "m_EulerCurves"):
+                              try: curves = getattr(data, field, None) or []
+                              except Exception: curves = []
+                              for curve in curves:
+                                  b = {}
+                                  for key in ("path", "attribute", "classID"):
+                                      try:
+                                          value = getattr(curve, key, None)
+                                          if value is not None: b[key] = str(value)
+                                      except Exception: pass
+                                  try:
+                                      curve_data = getattr(curve, "curve", None)
+                                      keys = getattr(curve_data, "m_Curve", None) or []
+                                      b["key_count"] = len(keys)
+                                      if keys: b["last_key_time"] = float(keys[-1].time)
+                                  except Exception: pass
+                                  row["bindings"].append(b)
+                          row["binding_count"] = len(row["bindings"])
+                          row["bindings"] = row["bindings"][:80]
+                          clips.append(row)
+                      elif typ == "SkinnedMeshRenderer":
+                          def resolve(ptr):
+                              try: return ptr.read() if ptr is not None and hasattr(ptr, "read") else None
+                              except Exception: return None
+                          mesh = resolve(getattr(data, "m_Mesh", None))
+                          bones = []
+                          for ptr in (getattr(data, "m_Bones", None) or []):
+                              bone = resolve(ptr)
+                              bones.append(str(getattr(bone, "m_Name", "") or "") if bone else "")
+                          rigs.append({"name": name, "path_id": int(obj.path_id), "container": container,
+                              "mesh": str(getattr(mesh, "m_Name", "") or "") if mesh else "",
+                              "bone_count": len(bones), "bones": bones[:100]})
+                      elif typ == "Avatar":
+                          avatars.append({"name": name, "path_id": int(obj.path_id), "container": container})
+              clips.sort(key=lambda x: (0 if any(k in x["name"].lower() for k in ("walk", "run", "idle", "attack", "fall", "jump", "die", "hit")) else 1, x["name"].lower()))
+              rigs.sort(key=lambda x: (-x["bone_count"], x["name"].lower()))
+              report["versions"][f"v{vi}"] = {"containers_scanned": len(files), "animation_clips": clips, "skinned_renderers": rigs, "avatars": avatars, "parse_errors": errors}
+              print(f"v{vi}: {len(clips)} clips, {len(rigs)} skinned renderers, {len(avatars)} avatars")
+          (out / "animation-binding-audit.json").write_text(json.dumps(report, indent=2, default=str))
+          lines = ["# TABZ animation-to-rig audit", "", report["note"], ""]
+          for version, data in report["versions"].items():
+              lines += [f"## {version}", "", f"- Containers scanned: {data['containers_scanned']}", f"- Clips: {len(data['animation_clips'])}", f"- Skinned renderers: {len(data['skinned_renderers'])}", f"- Avatars: {len(data['avatars'])}", f"- Parse errors: {len(data['parse_errors'])}", "", "### Animation clips", ""]
+              for clip in data["animation_clips"][:100]:
+                  lines.append(f"- {clip['name'] or '(unnamed)'} — {clip['binding_count']} bindings — {clip['container']} (path {clip['path_id']})")
+              lines += ["", "### Rig candidates", ""]
+              for rig in data["skinned_renderers"][:40]:
+                  lines.append(f"- {rig['name'] or '(unnamed)'} — mesh {rig['mesh']}, {rig['bone_count']} bones — {rig['container']}")
+              lines.append("")
+          (out / "ANIMATION-BINDING-AUDIT.md").write_text("\n".join(lines))
+          PY
+      - name: Publish report in job summary
+        if: always()
+        run: |
+          [ ! -f output/ANIMATION-BINDING-AUDIT.md ] || cat output/ANIMATION-BINDING-AUDIT.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-animation-binding-audit
+          path: output/
+          if-no-files-found: warn
+          retention-days: 14
