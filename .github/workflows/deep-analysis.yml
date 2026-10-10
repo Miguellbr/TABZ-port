@@ -113,7 +113,7 @@ jobs:
                   s=p.read_text(errors="ignore")
                   types += [{"name":m.group(1),"file":p.name} for m in re.finditer(r"\b(?:class|struct|enum|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",s)]
               r={"version":d.name,"cs_files":len(files),"approx_source_lines":sum(len(p.read_text(errors="ignore").splitlines()) for p in files),"keyword_counts":counts,"types":types[:500]}
-              reports.append(r); lines += [f"## {d.name}","","- Decompiled C# files: **{r['cs_files']}**",f"- Approximate lines: **{r['approx_source_lines']:,}**","","### Keyword counts",""] + [f"- `{k}`: {v}" for k,v in counts.items()] + ["","### Type names (up to 500)",""] + [f"- `{t['name']}` (`{t['file']}`)" for t in r["types"]] + [""]
+              reports.append(r); lines += [f"## {d.name}","",f"- Decompiled C# files: **{r['cs_files']}**",f"- Approximate lines: **{r['approx_source_lines']:,}**","","### Keyword counts",""] + [f"- `{k}`: {v}" for k,v in counts.items()] + ["","### Type names (up to 500)",""] + [f"- `{t['name']}` (`{t['file']}`)" for t in r["types"]] + [""]
           pathlib.Path("reports/managed-code-analysis.json").write_text(json.dumps(reports,indent=2))
           pathlib.Path("reports/MANAGED-CODE-ANALYSIS.md").write_text("\n".join(lines)+"\n")
           print(pathlib.Path("reports/MANAGED-CODE-ANALYSIS.md").read_text())
