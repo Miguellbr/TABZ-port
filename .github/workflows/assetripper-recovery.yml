@@ -72,8 +72,16 @@ jobs:
           curl -fL --retry 3 "https://github.com/nowl-it/AssetRipperCLI/releases/download/v1.0.1/AssetRipper_linux_x64.zip" -o /tmp/assetripper.zip
           mkdir -p /tmp/assetripper
           unzip -q /tmp/assetripper.zip -d /tmp/assetripper
-          chmod +x /tmp/assetripper/AssetRipper
-          /tmp/assetripper/AssetRipper --help
+          echo "Files included in AssetRipper package:"
+          find /tmp/assetripper -maxdepth 4 -type f -printf '%p (%s bytes)\\n' | head -80
+          BIN="$(find /tmp/assetripper -type f \\( -iname 'AssetRipper' -o -iname 'AssetRipperCLI' -o -iname 'assetripper' -o -iname 'AssetRipperCLI.exe' \\) | head -n 1)"
+          if [ -z "$BIN" ]; then
+            echo "::error::Could not find AssetRipper executable in downloaded archive"
+            exit 1
+          fi
+          chmod +x "$BIN"
+          echo "ASSET_RIPPER_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --help
       - name: Recover Unity project or primary assets
         run: |
           /tmp/assetripper/AssetRipper --cli \
