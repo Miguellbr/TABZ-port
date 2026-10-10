@@ -21,7 +21,7 @@ on:
         default: Unity
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   recover:
@@ -138,6 +138,24 @@ jobs:
             --mode "${{ inputs.mode }}" \
             --script-content-level Level2 \
             --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
+
+      - name: Import sanitized AK-74 prefab and dependencies into MobilePort
+        if: inputs.build == 'v5.1' && inputs.mode == 'Unity' && success()
+        run: |
+          python tools/package_original_weapon.py \
+            --assets "$GITHUB_WORKSPACE/output/v5.1/ExportedProject/Assets" \
+            --destination "$GITHUB_WORKSPACE/MobilePort/Assets/Resources/items" \
+            --weapon Ak74
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MobilePort/Assets/Resources
+          git add MobilePort/Assets/Material MobilePort/Assets/Mesh MobilePort/Assets/Sprite MobilePort/Assets/Texture2D
+          if git diff --cached --quiet; then
+            echo "No asset changes to commit."
+          else
+            git commit -m "Import sanitized original TABZ AK-74 visual assets"
+            git push
+          fi
 
       - name: Summarize recovered content
         if: always()
