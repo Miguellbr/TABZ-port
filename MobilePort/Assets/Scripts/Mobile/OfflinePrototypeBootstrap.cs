@@ -140,6 +140,9 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         weapon.ammo = startingAmmo;
         weapon.reserveAmmo = startingAmmo * 3;
         weapon.targetProvider = () => zombie;
+        OriginalWeaponVisualBridge originalWeapon = player.gameObject.AddComponent<OriginalWeaponVisualBridge>();
+        originalWeapon.viewCamera = player.viewCamera;
+        originalWeapon.resourcesPrefabPath = "items/Ak74";
     }
 
     private GameObject BuildInventoryPanel(Transform parent)
