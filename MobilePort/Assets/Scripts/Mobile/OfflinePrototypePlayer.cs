@@ -43,8 +43,8 @@ public class OfflinePrototypePlayer : MonoBehaviour
                 if (Input.GetKeyDown(KeyCode.Alpha1 + i)) MobileInputState.HotbarSlotPressed = i;
         }
 
-        transform.Rotate(0f, look.x * lookSensitivity, 0f);
-        pitch = Mathf.Clamp(pitch - look.y * lookSensitivity, -80f, 80f);
+        transform.Rotate(0f, look.x, 0f);
+        pitch = Mathf.Clamp(pitch - look.y, -80f, 80f);
         viewCamera.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
 
         float speed = moveSpeed * (sprint ? sprintMultiplier : 1f);
