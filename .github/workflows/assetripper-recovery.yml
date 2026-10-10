@@ -81,6 +81,12 @@ jobs:
           python - <<'PY'
           import hashlib, pathlib, collections
           root = pathlib.Path("extracted/game")
+          data_dirs = [p for p in root.rglob("*_Data") if p.is_dir() and (p / "globalgamemanagers").is_file()]
+          if len(data_dirs) != 1:
+              raise SystemExit("Expected exactly one Unity *_Data folder; found: " + ", ".join(str(p) for p in data_dirs))
+          root = data_dirs[0].parent
+          pathlib.Path("output/assetripper-input.txt").write_text(str(root.resolve()) + "\n")
+          print("AssetRipper input root:", root)
           files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() == ".dll")
           groups = collections.defaultdict(list)
           lines = ["# Managed assembly audit", "", f"Scanned root: {root}", f"DLL files found: {len(files)}", ""]
@@ -127,10 +133,10 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/output"
           "$ASSET_RIPPER_BIN" --cli \
-            --input "$GITHUB_WORKSPACE/extracted/game" \
+            --input "$(cat "$GITHUB_WORKSPACE/output/assetripper-input.txt")" \
             --output "$GITHUB_WORKSPACE/output/${{ inputs.build }}" \
             --mode "${{ inputs.mode }}" \
-            --script-content-level Level0 \
+            --script-content-level Level2 \
             --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
 
       - name: Summarize recovered content
