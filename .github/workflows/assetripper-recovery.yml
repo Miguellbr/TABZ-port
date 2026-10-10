@@ -76,6 +76,37 @@ jobs:
                   z.extractall(path=dest)
           PY
 
+      - name: Audit managed assemblies before AssetRipper import
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib, collections
+          root = pathlib.Path("extracted/game")
+          files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() == ".dll")
+          groups = collections.defaultdict(list)
+          lines = ["# Managed assembly audit", "", f"Scanned root: {root}", f"DLL files found: {len(files)}", ""]
+          for p in files:
+              digest = hashlib.sha256(p.read_bytes()).hexdigest()
+              groups[p.name.lower()].append((p, digest))
+          lines += ["## Duplicate DLL filenames", ""]
+          duplicates = {name: rows for name, rows in groups.items() if len(rows) > 1}
+          if not duplicates:
+              lines.append("No duplicate DLL filenames found.")
+          for name, rows in sorted(duplicates.items()):
+              lines.append(f"### {name}")
+              for p, digest in rows:
+                  lines.append(f"- {p.as_posix()} — SHA256 {digest}")
+          lines += ["", "## Assembly-CSharp candidates", ""]
+          candidates = [p for p in files if "assembly-csharp" in p.name.lower()]
+          lines += [f"- {p.as_posix()} ({p.stat().st_size} bytes)" for p in candidates] or ["No Assembly-CSharp DLL filenames found."]
+          lines += ["", "## Unity game markers", ""]
+          markers = [p for p in root.rglob("*") if p.is_file() and p.name.lower() in {"globalgamemanagers", "level0", "level1", "unityplayer.dll"}]
+          lines += [f"- {p.as_posix()}" for p in markers[:200]] or ["No common Unity markers found."]
+          out = pathlib.Path("output/ASSEMBLY-AUDIT.md")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          PY
+          cat output/ASSEMBLY-AUDIT.md >> "$GITHUB_STEP_SUMMARY"
       - name: Download AssetRipper CLI
         run: |
           curl -fL --retry 3 "https://github.com/nowl-it/AssetRipperCLI/releases/download/v1.0.1/AssetRipper_linux_x64.zip" -o /tmp/assetripper.zip
@@ -99,7 +130,7 @@ jobs:
             --input "$GITHUB_WORKSPACE/extracted/game" \
             --output "$GITHUB_WORKSPACE/output/${{ inputs.build }}" \
             --mode "${{ inputs.mode }}" \
-            --script-content-level Level2 \
+            --script-content-level Level0 \
             --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
 
       - name: Summarize recovered content
