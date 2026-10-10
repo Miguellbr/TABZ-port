@@ -30,17 +30,19 @@ public class MobileInventoryBridge : MonoBehaviour
         // dependency on script execution order in Update.
         if (MobileInputState.InventoryTogglePressed)
         {
-            MobileInputState.InventoryTogglePressed = false;
             if (ResolveInventory())
+            {
+                MobileInputState.InventoryTogglePressed = false;
                 toggleOpen.Invoke(inventoryComponent, null);
+            }
         }
 
         int slot = MobileInputState.HotbarSlotPressed;
         if (slot >= 0)
         {
-            MobileInputState.HotbarSlotPressed = -1;
             if (ResolveInventory() && selectedHotbarIndex != null && updateHotbarSelection != null)
             {
+                MobileInputState.HotbarSlotPressed = -1;
                 selectedHotbarIndex.SetValue(inventoryComponent, slot);
                 updateHotbarSelection.Invoke(inventoryComponent, null);
             }
