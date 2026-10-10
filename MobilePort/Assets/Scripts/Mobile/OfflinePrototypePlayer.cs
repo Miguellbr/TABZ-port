@@ -14,10 +14,12 @@ public class OfflinePrototypePlayer : MonoBehaviour
 
     private float pitch;
     private float verticalVelocity;
+    private float defaultFieldOfView = 75f;
 
     private void Update()
     {
         if (controller == null || viewCamera == null) return;
+        if (defaultFieldOfView <= 0f) defaultFieldOfView = viewCamera.fieldOfView;
 
         Vector2 move = MobileInputState.Move;
         bool sprint = MobileInputState.SprintHeld;
@@ -43,6 +45,7 @@ public class OfflinePrototypePlayer : MonoBehaviour
                 if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i))) MobileInputState.HotbarSlotPressed = i;
         }
 
+        viewCamera.fieldOfView = Mathf.Lerp(viewCamera.fieldOfView, MobileInputState.AimHeld ? 52f : defaultFieldOfView, Time.deltaTime * 12f);
         transform.Rotate(0f, look.x, 0f);
         pitch = Mathf.Clamp(pitch - look.y, -80f, 80f);
         viewCamera.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
