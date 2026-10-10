@@ -76,11 +76,11 @@ jobs:
           /tmp/assetripper/AssetRipper --help
       - name: Recover Unity project or primary assets
         run: |
-          /tmp/assetripper/AssetRipper --cli \\
-            --input "$GITHUB_WORKSPACE/extracted/game" \\
-            --output "$GITHUB_WORKSPACE/output/${{ inputs.build }}" \\
-            --mode "${{ inputs.mode }}" \\
-            --script-content-level Level0 \\
+          /tmp/assetripper/AssetRipper --cli \
+            --input "$GITHUB_WORKSPACE/extracted/game" \
+            --output "$GITHUB_WORKSPACE/output/${{ inputs.build }}" \
+            --mode "${{ inputs.mode }}" \
+            --script-content-level Level0 \
             --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
       - name: Summarize recovered content
         if: always()
@@ -93,8 +93,8 @@ jobs:
               files = [p for p in root.rglob("*") if p.is_file()]
               lines += [f"- Files exported: {len(files)}", f"- Total output size: {sum(p.stat().st_size for p in files) / (1024*1024):.1f} MiB", ""]
               for p in files[:150]: lines.append(f"- `{p.as_posix()}` ({p.stat().st_size} bytes)")
-          pathlib.Path("output/RECOVERY-REPORT.md").write_text("\\n".join(lines))
-          print("\\n".join(lines[:30]))
+          pathlib.Path("output/RECOVERY-REPORT.md").write_text(chr(10).join(lines))
+          print(chr(10).join(lines[:30]))
           PY
           cat output/RECOVERY-REPORT.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload recovered project
