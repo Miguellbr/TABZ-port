@@ -3,9 +3,9 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
 /// <summary>
-/// Creates a usable landscape touch HUD at runtime, avoiding a dependency on
-/// recovered editor-side scene files. Attach to a scene object for testing.
-/// Gameplay still needs to consume MobileInputState.
+/// Creates the landscape touch HUD without requiring recovered editor scenes.
+/// Attach to a scene object in the test scene. Gameplay scripts still need
+/// explicit mobile branches to consume MobileInputState.
 /// </summary>
 public class MobileControlsBootstrap : MonoBehaviour
 {
@@ -35,8 +35,6 @@ public class MobileControlsBootstrap : MonoBehaviour
 
         RectTransform root = canvasObject.GetComponent<RectTransform>();
 
-        // The look surface is created first so the buttons created afterwards
-        // sit above it in UI raycast order.
         GameObject lookObject = MakeRect("Look Area", root, new Vector2(0.42f, 0.05f),
             new Vector2(1f, 0.95f), new Vector2(0.5f, 0.5f));
         Image lookImage = lookObject.AddComponent<Image>();
@@ -67,6 +65,24 @@ public class MobileControlsBootstrap : MonoBehaviour
             new Vector2(0.70f, 0.29f), new Vector2(0.80f, 0.42f), new Color(0.2f, 0.2f, 0.2f, 0.7f));
         MakeButton(root, "USE", MobileActionButton.ActionType.Interact,
             new Vector2(0.83f, 0.34f), new Vector2(0.94f, 0.47f), new Color(0.2f, 0.2f, 0.2f, 0.7f));
+
+        // The original game has a six-slot hotbar; these buttons emit slot taps
+        // that the UIInventory mobile patch will consume.
+        string[] slotLabels = { "1", "2", "3", "4", "5", "6" };
+        MobileActionButton.ActionType[] slotActions = {
+            MobileActionButton.ActionType.Hotbar1, MobileActionButton.ActionType.Hotbar2,
+            MobileActionButton.ActionType.Hotbar3, MobileActionButton.ActionType.Hotbar4,
+            MobileActionButton.ActionType.Hotbar5, MobileActionButton.ActionType.Hotbar6
+        };
+        for (int i = 0; i < slotLabels.Length; i++)
+        {
+            float left = 0.36f + i * 0.052f;
+            MakeButton(root, slotLabels[i], slotActions[i],
+                new Vector2(left, 0.86f), new Vector2(left + 0.048f, 0.96f),
+                new Color(0.08f, 0.08f, 0.08f, 0.62f));
+        }
+        MakeButton(root, "INV", MobileActionButton.ActionType.Inventory,
+            new Vector2(0.03f, 0.84f), new Vector2(0.13f, 0.96f), new Color(0.12f, 0.12f, 0.12f, 0.72f));
     }
 
     private GameObject MakeRect(string objectName, RectTransform parent,
@@ -89,6 +105,8 @@ public class MobileControlsBootstrap : MonoBehaviour
         GameObject go = MakeRect(label + " Button", parent, min, max, new Vector2(0.5f, 0.5f));
         Image image = go.AddComponent<Image>();
         image.color = color;
+        Button button = go.AddComponent<Button>();
+        button.targetGraphic = image;
         go.AddComponent<MobileActionButton>().action = action;
 
         GameObject textObject = MakeRect("Label", go.GetComponent<RectTransform>(),
