@@ -48,6 +48,7 @@ public class MobileControlsBootstrap : MonoBehaviour
         baseImage.color = new Color(0.08f, 0.08f, 0.08f, 0.38f);
         MobileVirtualJoystick joystick = joystickObject.AddComponent<MobileVirtualJoystick>();
         joystick.background = joystickObject.GetComponent<RectTransform>();
+        joystick.floatingJoystick = false;
         GameObject handleObject = MakeRect("Joystick Handle", joystickObject.GetComponent<RectTransform>(),
             new Vector2(0.25f, 0.25f), new Vector2(0.75f, 0.75f), new Vector2(0.5f, 0.5f));
         Image handleImage = handleObject.AddComponent<Image>();
