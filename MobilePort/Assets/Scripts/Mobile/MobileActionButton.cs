@@ -2,12 +2,17 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 
 /// <summary>
-/// Reusable touch button. Set action to Fire, Aim, Jump, Sprint, Crouch,
-/// Reload, or Interact. Hold actions remain active while pressed.
+/// Reusable touch button. Hold actions remain active while pressed; one-shot
+/// actions are latched until the gameplay adapter consumes/resets the frame.
 /// </summary>
 public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
-    public enum ActionType { Fire, Aim, Jump, Sprint, Crouch, Reload, Interact }
+    public enum ActionType
+    {
+        Fire, Aim, Jump, Sprint, Crouch, Reload, Interact, Inventory,
+        Hotbar1, Hotbar2, Hotbar3, Hotbar4, Hotbar5, Hotbar6
+    }
+
     public ActionType action;
 
     public void OnPointerDown(PointerEventData eventData) { SetState(true); }
@@ -17,13 +22,23 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
     {
         switch (action)
         {
-            case ActionType.Fire: MobileInputState.FireHeld = pressed; break;
+            case ActionType.Fire:
+                MobileInputState.FireHeld = pressed;
+                if (pressed) MobileInputState.FirePressed = true;
+                break;
             case ActionType.Aim: MobileInputState.AimHeld = pressed; break;
             case ActionType.Jump: MobileInputState.JumpHeld = pressed; break;
             case ActionType.Sprint: MobileInputState.SprintHeld = pressed; break;
             case ActionType.Crouch: MobileInputState.CrouchHeld = pressed; break;
             case ActionType.Reload: if (pressed) MobileInputState.ReloadPressed = true; break;
             case ActionType.Interact: if (pressed) MobileInputState.InteractPressed = true; break;
+            case ActionType.Inventory: if (pressed) MobileInputState.InventoryTogglePressed = true; break;
+            case ActionType.Hotbar1: if (pressed) MobileInputState.HotbarSlotPressed = 0; break;
+            case ActionType.Hotbar2: if (pressed) MobileInputState.HotbarSlotPressed = 1; break;
+            case ActionType.Hotbar3: if (pressed) MobileInputState.HotbarSlotPressed = 2; break;
+            case ActionType.Hotbar4: if (pressed) MobileInputState.HotbarSlotPressed = 3; break;
+            case ActionType.Hotbar5: if (pressed) MobileInputState.HotbarSlotPressed = 4; break;
+            case ActionType.Hotbar6: if (pressed) MobileInputState.HotbarSlotPressed = 5; break;
         }
     }
 
