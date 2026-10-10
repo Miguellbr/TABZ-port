@@ -1,0 +1,28 @@
+name: Mobile prototype source checks
+
+on:
+  push:
+    paths:
+      - "MobilePort/Assets/Scripts/Mobile/**"
+      - "tools/check_mobile_prototype.py"
+      - ".github/workflows/mobile-prototype-check.yml"
+  pull_request:
+    paths:
+      - "MobilePort/Assets/Scripts/Mobile/**"
+      - "tools/check_mobile_prototype.py"
+      - ".github/workflows/mobile-prototype-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate prototype source contracts
+        run: python tools/check_mobile_prototype.py
