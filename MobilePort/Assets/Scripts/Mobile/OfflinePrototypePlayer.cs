@@ -40,7 +40,7 @@ public class OfflinePrototypePlayer : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.E)) MobileInputState.InteractPressed = true;
             if (Input.GetKeyDown(KeyCode.I) || Input.GetKeyDown(KeyCode.Tab)) MobileInputState.InventoryTogglePressed = true;
             for (int i = 0; i < 6; i++)
-                if (Input.GetKeyDown(KeyCode.Alpha1 + i)) MobileInputState.HotbarSlotPressed = i;
+                if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i))) MobileInputState.HotbarSlotPressed = i;
         }
 
         transform.Rotate(0f, look.x, 0f);
