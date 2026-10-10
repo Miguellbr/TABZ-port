@@ -15,7 +15,7 @@ public class MobileControlsBootstrap : MonoBehaviour
     private void Awake()
     {
         if (!Application.isMobilePlatform && !createOnDesktopForTesting) return;
-        if (FindObjectOfType<Canvas>() != null) return;
+        if (GameObject.Find("TABZ Mobile HUD") != null) return;
 
         if (FindObjectOfType<EventSystem>() == null)
         {
@@ -28,6 +28,7 @@ public class MobileControlsBootstrap : MonoBehaviour
         Canvas canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvasObject.AddComponent<GraphicRaycaster>();
+        canvasObject.AddComponent<MobileInventoryBridge>();
         CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1280f, 720f);
