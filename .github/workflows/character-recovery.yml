@@ -110,6 +110,18 @@ jobs:
                       except Exception: continue
                       nm = name_of(data)
                       row = {"container": container, "path_id": int(obj.path_id), "type": typ, "name": nm}
+                      # Components get their visible name from the owning GameObject.
+                      owner_ptr = getattr(data, "m_GameObject", None)
+                      owner_obj = resolve(owner_ptr)
+                      if owner_ptr is not None:
+                          row["game_object"] = {
+                              "path_id": getattr(owner_ptr, "path_id", None),
+                              "name": name_of(owner_obj) if owner_obj is not None else "",
+                              "resolved_type": type(owner_obj).__name__ if owner_obj is not None else None
+                          }
+                      if typ == "Transform":
+                          row["parent_transform"] = ptr_meta(getattr(data, "m_Father", None))
+                          row["child_transforms"] = [ptr_meta(p) for p in (getattr(data, "m_Children", None) or [])]
                       if typ == "SkinnedMeshRenderer":
                           mesh_ptr = getattr(data, "m_Mesh", None)
                           mesh = resolve(mesh_ptr)
@@ -159,7 +171,8 @@ jobs:
               for r in data["relevant_objects"][:80]:
                   if r.get("character_relevance_score", 0) or r["type"] == "SkinnedMeshRenderer":
                       mesh = r.get("mesh") or {}
-                      md.append(f"- **{r['type']}** '{r['name'] or '(unnamed)'}' — container '{r['container']}', path ID '{r['path_id']}', mesh '{mesh.get('name','')}'")
+                      owner = r.get("game_object") or {}
+                      md.append(f"- **{r['type']}** '{r['name'] or '(unnamed)'}' — GameObject '{owner.get('name','') or '(unresolved)'}' (ID {owner.get('path_id','?')}), container '{r['container']}', path ID '{r['path_id']}', mesh '{mesh.get('name','')}'")
               md.append("")
           (out / "CHARACTER-REFERENCE-MAP.md").write_text("\n".join(md))
           print("Wrote character-reference-map.json and CHARACTER-REFERENCE-MAP.md")
