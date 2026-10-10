@@ -74,7 +74,47 @@ jobs:
           unzip -q /tmp/assetripper.zip -d /tmp/assetripper
           echo "Files included in AssetRipper package:"
           find /tmp/assetripper -maxdepth 4 -type f -printf '%p (%s bytes)\n' | head -80
-          BIN="$(find /tmp/assetripper -type f | grep -Ei '/(AssetRipper|AssetRipperCLI|assetripper|AssetRipperCLI[.]exe)$' | head -n 1)"
+          BIN="$(find /tmp/assetripper -type f | grep -Ei '/(AssetRipper|AssetRipperCLI|assetripper|AssetRipperCLI[.]exe|AssetRipper[.]GUI[.]Free)
+          if [ -z "$BIN" ]; then
+            echo "::error::Could not find AssetRipper executable in downloaded archive"
+            exit 1
+          fi
+          chmod +x "$BIN"
+          echo "ASSET_RIPPER_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --help
+      - name: Recover Unity project or primary assets
+        run: |
+          "$ASSET_RIPPER_BIN" --cli \
+            --input "$GITHUB_WORKSPACE/extracted/game" \
+            --output "$GITHUB_WORKSPACE/output/${{ inputs.build }}" \
+            --mode "${{ inputs.mode }}" \
+            --script-content-level Level0 \
+            --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
+      - name: Summarize recovered content
+        if: always()
+        run: |
+          python - <<'PY'
+          import pathlib
+          root = pathlib.Path("output")
+          lines = ["# TABZ AssetRipper recovery", "", "A successful export does not guarantee the reconstructed project opens or builds without manual repair.", ""]
+          if root.exists():
+              files = [p for p in root.rglob("*") if p.is_file()]
+              lines += [f"- Files exported: {len(files)}", f"- Total output size: {sum(p.stat().st_size for p in files) / (1024*1024):.1f} MiB", ""]
+              for p in files[:150]: lines.append(f"- `{p.as_posix()}` ({p.stat().st_size} bytes)")
+          pathlib.Path("output/RECOVERY-REPORT.md").write_text(chr(10).join(lines))
+          print(chr(10).join(lines[:30]))
+          PY
+          cat output/RECOVERY-REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload recovered project
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-assetripper-${{ inputs.build }}-${{ inputs.mode }}
+          path: output/
+          if-no-files-found: warn
+          compression-level: 1
+          retention-days: 7
+ | head -n 1)"
           if [ -z "$BIN" ]; then
             echo "::error::Could not find AssetRipper executable in downloaded archive"
             exit 1
