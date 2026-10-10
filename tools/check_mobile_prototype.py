@@ -12,6 +12,7 @@ FILES = {
     "OfflinePrototypePlayer.cs": ["class OfflinePrototypePlayer", "CharacterController", "ConsumeLookDelta", "Input.GetAxisRaw"],
     "OfflinePrototypeWeapon.cs": ["class OfflinePrototypeWeapon", "void Fire()", "void Reload()", "Physics.Raycast"],
     "OfflinePrototypeZombie.cs": ["class OfflinePrototypeZombie", "TakeDamage", "IsDead"],
+    "OriginalWeaponVisualBridge.cs": ["class OriginalWeaponVisualBridge", "Resources.Load<GameObject>", "viewCamera.transform"],
 }
 
 def strip_csharp_literals_and_comments(source):
@@ -75,6 +76,21 @@ for filename, required in FILES.items():
                     balance = 0
     if balance:
         errors.append(f"{filename}: {balance} unclosed brace(s)")
+
+# The recovered AK-74 must be committed and the runtime bootstrap must actually attach its visual bridge.
+required_assets = [
+    ROOT / "MobilePort" / "Assets" / "Resources" / "items" / "Ak74.prefab",
+    ROOT / "MobilePort" / "Assets" / "Mesh" / "AK_47.asset",
+]
+for asset in required_assets:
+    if not asset.is_file():
+        errors.append(f"Missing imported original weapon asset: {asset.relative_to(ROOT)}")
+
+bootstrap = (BASE / "OfflinePrototypeBootstrap.cs").read_text(encoding="utf-8")
+if "AddComponent<OriginalWeaponVisualBridge>" not in bootstrap:
+    errors.append("OfflinePrototypeBootstrap.cs: original weapon visual bridge is not attached")
+if 'resourcesPrefabPath = "items/Ak74"' not in bootstrap:
+    errors.append("OfflinePrototypeBootstrap.cs: expected original AK-74 Resources path is missing")
 
 offline_files = ["OfflinePrototypeBootstrap.cs", "OfflinePrototypePlayer.cs", "OfflinePrototypeWeapon.cs", "OfflinePrototypeZombie.cs"]
 for filename in offline_files:
