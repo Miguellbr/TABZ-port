@@ -103,3 +103,43 @@ if errors:
     print("\n".join("ERROR: " + e for e in errors))
     sys.exit(1)
 print(f"PASS: validated {len(FILES)} C# files, brace balance, input/UI contracts and offline dependency boundary.")
+
+
+# The manual Android build must validate the imported prefab before compiling.
+build_script = ROOT / "MobilePort" / "Assets" / "Editor" / "TABZMobileBuild.cs"
+if not build_script.is_file():
+    errors.append("Missing Unity Android build entry point: MobilePort/Assets/Editor/TABZMobileBuild.cs")
+else:
+    build_source = build_script.read_text(encoding="utf-8")
+    for token in (
+        "public static void BuildAndroid()",
+        'Resources.Load<GameObject>(WeaponResourcePath)',
+        "BuildPipeline.BuildPlayer(options)",
+        'PlayerSettings.applicationIdentifier = "com.miguellbr.tabzmobileprototype"',
+        'Path.Combine(outputDirectory, "TABZ-Mobile-Prototype.apk")',
+        "visibleRenderers == 0",
+    ):
+        if token not in build_source:
+            errors.append(f"TABZMobileBuild.cs: missing expected token {token!r}")
+    stripped_build = strip_csharp_literals_and_comments(build_source)
+    build_balance = 0
+    for line_no, line in enumerate(stripped_build.splitlines(), 1):
+        for ch in line:
+            if ch == "{":
+                build_balance += 1
+            elif ch == "}":
+                build_balance -= 1
+                if build_balance < 0:
+                    errors.append(f"TABZMobileBuild.cs:{line_no}: unexpected closing brace")
+                    build_balance = 0
+    if build_balance:
+        errors.append(f"TABZMobileBuild.cs: {build_balance} unclosed brace(s)")
+
+workflow = ROOT / ".github" / "workflows" / "android-prototype-build.yml"
+if not workflow.is_file():
+    errors.append("Missing manual Android build workflow")
+else:
+    workflow_source = workflow.read_text(encoding="utf-8")
+    for token in ("workflow_dispatch:", "game-ci/unity-builder@v4", "TABZMobileBuild.BuildAndroid", "UNITY_LICENSE"):
+        if token not in workflow_source:
+            errors.append(f"android-prototype-build.yml: missing expected token {token!r}")
