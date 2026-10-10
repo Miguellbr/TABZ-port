@@ -1,39 +1,48 @@
 # Building the Android prototype
 
-The APK is built on GitHub Actions; you do not need a PC to trigger the workflows. The project targets Unity **2022.3.62f1** and ARM64 Android devices.
+The APK is built on GitHub Actions, so you can trigger the build from your phone. The project uses Unity **2022.3.62f1** and targets ARM64 Android devices.
 
-## Step 1 — Request an activation file
+## License status: one required setup step
 
-1. Open **Actions → Request Unity license activation file → Run workflow**: https://github.com/Miguellbr/TABZ-port/actions/workflows/request-unity-license.yml
-2. When the run succeeds, open it and download the `Unity-Activation-Request` artifact.
-3. Extract the `.alf` file from the downloaded ZIP.
-4. Open https://license.unity3d.com/ and submit the `.alf` file.
-5. If Unity lets you obtain a license file, download the `.ulf` file.
+The old workflow that tried to generate a Unity `.alf` activation request no longer works. Do not run it again: GameCI's action now fails, and it cannot produce an artifact.
 
-**Important limitation:** Unity's current documentation says manual activation of Personal licenses may no longer be supported in the portal. If the portal does not offer Personal, do not buy a paid license just for this prototype; tell me what the page shows and we can evaluate the available legitimate options. GameCI documents this limitation and workaround notes here: https://game.ci/docs/3/github/activation/.
+For a free **Unity Personal** license, the current supported route documented by Unity and GameCI is to activate through **Unity Hub on a computer**. There is no reliable official phone-only activation route for this workflow. Since you currently only have a phone, the practical option is to temporarily use a trusted Windows, macOS, or Linux computer (for example, borrow one). You should not need to keep that computer for building the APK; GitHub Actions does the build.
 
-## Step 2 — Add GitHub Actions secrets
+Official instructions:
+- GameCI activation: https://game.ci/docs/github/activation/
+- Unity license activation methods: https://docs.unity.com/en-us/engine/6000.0/manual/get-started/install-and-upgrade/licenses-and-activation/license-activation-methods
 
-Open https://github.com/Miguellbr/TABZ-port/settings/secrets/actions and add these repository secrets:
+### One-time setup on a trusted computer
 
-- `UNITY_LICENSE` — the full text inside the `.ulf` file, not the file path.
-- `UNITY_EMAIL` — the email address for your Unity account.
-- `UNITY_PASSWORD` — the password for that Unity account.
+1. Install Unity Hub from https://unity.com/download and sign in to your own Unity account.
+2. In Unity Hub, open **Preferences/Settings → Licenses → Add** and choose **Get a free Personal license**. Follow the prompts to complete activation.
+3. Locate the generated `.ulf` file:
+   - Windows: `C:\\ProgramData\\Unity\\Unity_lic.ulf`
+   - macOS: `/Library/Application Support/Unity/Unity_lic.ulf`
+   - Linux: `~/.local/share/unity3d/Unity/Unity_lic.ulf`
+4. On GitHub, open https://github.com/Miguellbr/TABZ-port/settings/secrets/actions and add these **repository secrets**:
+   - `UNITY_LICENSE`: the complete text inside the `.ulf` file.
+   - `UNITY_EMAIL`: the email address for your Unity account.
+   - `UNITY_PASSWORD`: the password for that Unity account.
+5. Sign out of Unity Hub on the borrowed computer and remove any local copy of the license file if you prefer not to leave account-related files there. Never commit these values to the repository or send them in chat.
 
-Do not commit these values to the repository or paste them into chat. GitHub encrypts repository Actions secrets.
+Do not buy a paid Unity plan just for this prototype. If you cannot borrow a computer, we can continue checking and improving the code, but we should be honest that a real Unity APK build remains blocked until a supported license is available.
 
-## Step 3 — Build the APK
+## Build the APK
 
-1. Open **Actions → Build TABZ Android prototype APK → Run workflow**: https://github.com/Miguellbr/TABZ-port/actions/workflows/android-prototype-build.yml
+After the secrets are configured:
+
+1. Open **Actions → Build TABZ Android prototype APK → Run workflow**:
+   https://github.com/Miguellbr/TABZ-port/actions/workflows/android-prototype-build.yml
 2. Wait for the job to finish.
-3. If successful, download `TABZ-Mobile-Prototype-APK` from the run's Artifacts section.
+3. If successful, download `TABZ-Mobile-Prototype-APK` from the run's **Artifacts** section.
 
-Before compiling, the editor build method checks that the prototype scene exists and that `Resources/items/Ak74` loads with at least one enabled mesh renderer using a valid mesh. It then builds an ARM64 APK in landscape orientation.
+The build script checks that the prototype scene exists and that `Resources/items/Ak74` loads with at least one enabled mesh renderer using a valid mesh. It then builds an ARM64 APK in landscape orientation.
 
-A successful build proves the project compiled and an APK was produced. It does **not** prove that the weapon's position/orientation looks correct on a real phone; that still requires installing and visually testing the APK.
+A successful build proves that Unity compiled the project and produced an APK. It does **not** prove that the weapon's position/orientation looks correct on a real phone; that still requires installing and visually testing the APK.
 
 ## Current limitations
 
 - The scene still uses a placeholder capsule for the zombie.
 - The AK-74 is a visual prefab; offline firing/damage remains handled by the prototype weapon script.
-- The first APK is a development prototype, not a finished port of TABZ.
+- This is an early development prototype, not a finished port of TABZ.
