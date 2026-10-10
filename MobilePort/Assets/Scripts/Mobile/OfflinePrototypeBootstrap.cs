@@ -21,6 +21,9 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
     private Text ammoText;
     private Text inventoryText;
     private Canvas canvas;
+    private GameObject inventoryPanel;
+    private Text hotbarText;
+    private int selectedSlot;
 
     private void Start()
     {
@@ -34,6 +37,16 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
 
     private void Update()
     {
+        if (MobileInputState.InventoryTogglePressed)
+        {
+            MobileInputState.InventoryTogglePressed = false;
+            if (inventoryPanel != null) inventoryPanel.SetActive(!inventoryPanel.activeSelf);
+        }
+        if (MobileInputState.HotbarSlotPressed >= 0)
+        {
+            selectedSlot = MobileInputState.HotbarSlotPressed;
+            MobileInputState.HotbarSlotPressed = -1;
+        }
         if (status != null)
         {
             status.text = zombie == null || zombie.IsDead
@@ -42,8 +55,8 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         }
         if (ammoText != null && weapon != null)
             ammoText.text = "MUNIÇÃO  " + weapon.Ammo + " / " + weapon.ReserveAmmo;
-        if (inventoryText != null)
-            inventoryText.text = "INVENTÁRIO  |  [1] RIFLE DE TESTE";
+        if (hotbarText != null)
+            hotbarText.text = "HOTBAR  [" + (selectedSlot + 1) + "] RIFLE DE TESTE";
     }
 
     private void BuildWorld()
@@ -109,8 +122,10 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
             new Vector2(0.35f, 0.88f), new Vector2(0.65f, 0.98f), TextAnchor.MiddleCenter);
         ammoText = MakeText("Ammo", canvas.transform, "MUNIÇÃO  30 / 90", 22,
             new Vector2(0.78f, 0.84f), new Vector2(0.98f, 0.96f), TextAnchor.MiddleRight);
-        inventoryText = MakeText("Inventory", canvas.transform, "INVENTÁRIO | [1] RIFLE DE TESTE", 18,
+        hotbarText = MakeText("Hotbar Selection", canvas.transform, "HOTBAR  [1] RIFLE DE TESTE", 18,
             new Vector2(0.33f, 0.02f), new Vector2(0.67f, 0.10f), TextAnchor.MiddleCenter);
+        inventoryPanel = BuildInventoryPanel(canvas.transform);
+        inventoryPanel.SetActive(false);
 
         MakeButton("DEV: GERAR ZUMBI", canvas.transform, new Vector2(0.39f, 0.76f),
             new Vector2(0.61f, 0.85f), () => SpawnZombie());
@@ -125,6 +140,25 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         weapon.ammo = startingAmmo;
         weapon.reserveAmmo = startingAmmo * 3;
         weapon.targetProvider = () => zombie;
+    }
+
+    private GameObject BuildInventoryPanel(Transform parent)
+    {
+        GameObject panel = new GameObject("Prototype Inventory Panel");
+        panel.transform.SetParent(parent, false);
+        RectTransform rect = panel.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.28f, 0.18f);
+        rect.anchorMax = new Vector2(0.72f, 0.78f);
+        rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
+        Image background = panel.AddComponent<Image>();
+        background.color = new Color(0.04f, 0.05f, 0.04f, 0.94f);
+        MakeText("Inventory Title", panel.transform, "INVENTÁRIO (PROTÓTIPO)", 24,
+            new Vector2(0.08f, 0.78f), new Vector2(0.92f, 0.96f), TextAnchor.MiddleCenter);
+        MakeButton("RIFLE DE TESTE — EQUIPADO", panel.transform, new Vector2(0.12f, 0.42f),
+            new Vector2(0.88f, 0.70f), () => { selectedSlot = 0; });
+        MakeButton("FECHAR INVENTÁRIO", panel.transform, new Vector2(0.25f, 0.10f),
+            new Vector2(0.75f, 0.30f), () => panel.SetActive(false));
+        return panel;
     }
 
     private void EnsureEventSystem()
