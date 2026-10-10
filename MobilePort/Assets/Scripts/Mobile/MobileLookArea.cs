@@ -24,7 +24,7 @@ public class MobileLookArea : MonoBehaviour, IPointerDownHandler, IDragHandler, 
         if (eventData.pointerId != activePointer) return;
         Vector2 delta = eventData.position - previousPosition;
         previousPosition = eventData.position;
-        float y = invertY ? delta.y : -delta.y;
+        float y = invertY ? -delta.y : delta.y;
         MobileInputState.LookDelta += new Vector2(delta.x, y) * sensitivity;
     }
 
