@@ -81,6 +81,10 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         cameraObject.transform.localPosition = new Vector3(0f, 1.55f, 0f);
         Camera camera = cameraObject.AddComponent<Camera>();
         camera.fieldOfView = 75f;
+        // The recovered AK mesh reaches close to the camera because its prefab
+        // bounds extend along local X and the child transform turns X into depth.
+        // A shorter near plane prevents the camera from slicing through it.
+        camera.nearClipPlane = 0.05f;
         cameraObject.AddComponent<AudioListener>();
         player.viewCamera = camera;
 
@@ -129,8 +133,6 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
 
         MakeButton("DEV: GERAR ZUMBI", canvas.transform, new Vector2(0.39f, 0.76f),
             new Vector2(0.61f, 0.85f), () => SpawnZombie());
-        MakeButton("DEV: RECARREGAR", canvas.transform, new Vector2(0.80f, 0.70f),
-            new Vector2(0.96f, 0.80f), () => { if (weapon != null) weapon.Reload(); });
 
         // Create the shared touch input HUD. It remains usable on desktop when
         // testing is enabled, so no Android build is required to inspect layout.
