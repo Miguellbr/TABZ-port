@@ -156,7 +156,8 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
         else
         {
             isReloadMoving = false;
-            MoveWeaponToOriginalAim();
+            if (armsRig == null || !armsRig.IsGrabbingWeapon)
+                MoveWeaponToOriginalAim();
         }
 
         if (recoilStartTime < 0f || isReloadMoving) return;
