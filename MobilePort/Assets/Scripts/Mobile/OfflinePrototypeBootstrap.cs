@@ -215,20 +215,23 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         fogDiagnosticText = MakeText("Fog Diagnostics", panel.transform, "Verificando efeito da câmera...", 12,
             new Vector2(0.08f, 0.51f), new Vector2(0.92f, 0.68f), TextAnchor.MiddleCenter);
         MakeButton("COPIAR DIAGNÓSTICO", panel.transform,
-            new Vector2(0.22f, 0.43f), new Vector2(0.78f, 0.50f),
+            new Vector2(0.22f, 0.48f), new Vector2(0.78f, 0.55f),
             CopyFogDiagnostic);
+        MakeButton("VISUALIZAR DEPTH (TOQUE PARA VOLTAR)", panel.transform,
+            new Vector2(0.10f, 0.39f), new Vector2(0.90f, 0.46f),
+            () => { if (distanceFog != null) distanceFog.ToggleDepthDebug(); });
 
         MakeButton("ATIVAR / DESATIVAR NÉVOA", panel.transform,
-            new Vector2(0.12f, 0.38f), new Vector2(0.88f, 0.51f),
+            new Vector2(0.12f, 0.27f), new Vector2(0.88f, 0.37f),
             () => { fogEnabled = !fogEnabled; ApplyFogSettings(); });
         MakeButton("ALTERAR INTENSIDADE", panel.transform,
-            new Vector2(0.12f, 0.23f), new Vector2(0.88f, 0.36f),
+            new Vector2(0.12f, 0.16f), new Vector2(0.88f, 0.25f),
             () => { fogProfile = (fogProfile + 1) % 3; ApplyFogSettings(); });
         MakeButton("FPS: MOSTRAR / OCULTAR", panel.transform,
-            new Vector2(0.12f, 0.08f), new Vector2(0.88f, 0.21f),
+            new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.14f),
             () => { showFps = !showFps; if (fpsText != null) fpsText.enabled = showFps; });
         MakeButton("FECHAR", panel.transform,
-            new Vector2(0.68f, 0.01f), new Vector2(0.92f, 0.08f),
+            new Vector2(0.68f, 0.01f), new Vector2(0.92f, 0.05f),
             () => panel.SetActive(false));
         return panel;
     }
