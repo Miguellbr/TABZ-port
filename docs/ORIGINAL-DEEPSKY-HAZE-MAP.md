@@ -119,10 +119,79 @@ The original `DS_HazeView` defaults include:
 
 Those are the original PC effect defaults, not recommended Android defaults. For the low-end Android baseline, temporal history, directional shafts and local volumetric lights are candidates to omit or make optional. The base fog still needs depth-aware distance integration and the original context/light-colour behavior; replacing it with a uniform grey overlay is not equivalent.
 
-## 7. Original platform requirements\n\nThe original `DS_HazeView.CheckHasSystemSupport` disables the effect when image effects or render textures are unavailable, when shader model 3.0 is unavailable, or when `RFloat` render textures are unsupported. HDR cameras additionally require `ARGBHalf`. Forward rendering with MSAA is rejected because the effect uses floating-point render targets. This is another reason not to assume the original PC component can simply be enabled unchanged on every Android device.\n\n## 8. What is and is not mapped
+## 7. Original platform requirements\n\nThe original `DS_HazeView.CheckHasSystemSupport` disables the effect when image effects or render textures are unavailable, when shader model 3.0 is unavailable, or when `RFloat` render textures are unsupported. HDR cameras additionally require `ARGBHalf`. Forward rendering with MSAA is rejected because the effect uses floating-point render targets. This is another reason not to assume the original PC component can simply be enabled unchanged on every Android device.\n\n## 8. Named constant-buffer and texture mapping
 
-**Mapped:** original C# context fields to named Unity shader globals; pass order; DX11 vertex/pixel pairing; pass responsibilities; temporal/depth texture flow.
+The Unity serialized shader metadata stores the per-subprogram constant-buffer layouts. In that metadata, `m_Index` is the member's byte offset in its constant buffer. Dividing by 16 gives the corresponding HLSL `float4` register; scalar offsets within a register identify the component. The binding table identifies the constant-buffer slot (`b0`, `b1`, etc.).
 
-**Still outstanding:** exact DXBC constant-buffer register offsets (`cb0[]`, `cb1[]`, etc.) to each named Unity global/vector component. The recovered FXCD HLSL is register-level and the C# source exposes the semantic property names, but the current report does not yet claim a verified register-by-register RDEF reflection map. That is a separate low-level extraction step.
+### Main composite — `DS_TEMPORALUPSCALE` pixel shader
+
+This is the important mapping for the actual atmosphere-to-scene composite.
+
+| Constant buffer | Slot | Member | Byte offset | HLSL register |
+|---|---:|---|---:|---|
+| `$Globals` | b0 | `_DS_RBetaS` | 176 | `cb0[11]` |
+| `$Globals` | b0 | `_DS_BetaParams` | 192 | `cb0[12]` |
+| `$Globals` | b0 | `_DS_AirHazeParams` | 208 | `cb0[13]` |
+| `$Globals` | b0 | `_DS_FogParams` | 224 | `cb0[14]` |
+| `$Globals` | b0 | `_DS_InitialDensityParams` | 240 | `cb0[15]` |
+| `$Globals` | b0 | `_DS_LightDirection` | 256 | `cb0[16]` |
+| `$Globals` | b0 | `_DS_LightColour` | 272 | `cb0[17]` |
+| `$Globals` | b0 | `_DS_FogAmbientLight` | 288 | `cb0[18]` |
+| `$Globals` | b0 | `_DS_FogDirectLight` | 304 | `cb0[19]` |
+| `$Globals` | b0 | `_HalfResDepth_TexelSize` | 352 | `cb0[22]` |
+| `$Globals` | b0 | `_SamplingParams` | 368 | `cb0[23]` |
+| `$Globals` | b0 | `_PreviousViewProjMatrix` | 448 | `cb0[28..31]` |
+| `$Globals` | b0 | `_PreviousInvViewProjMatrix` | 512 | `cb0[32..35]` |
+| `UnityPerCamera` | b1 | `_WorldSpaceCameraPos` | 64 | `cb1[4]` |
+| `UnityPerCamera` | b1 | `_ProjectionParams` | 80 | `cb1[5]` |
+| `UnityPerCamera` | b1 | `_ZBufferParams` | 112 | `cb1[7]` |
+
+The temporal keyword variant adds `_SamplingParams` and the two previous-frame matrices. The non-temporal variant retains the atmospheric globals but does not need the history matrices.
+
+Pixel-shader texture bindings for the composite:
+
+| Texture slot | Texture |
+|---:|---|
+| t0 | `_CameraDepthTexture` |
+| t1 | `_MainTex` (camera scene) |
+| t2 | `_HalfResDepth` |
+| t3 | `_RadianceBuffer` |
+| t4 | `_PrevAccumBuffer` (temporal variant) |
+| t5 | `_PrevDepthBuffer` (temporal variant) |
+
+### Supporting passes
+
+- **Bilateral blur X/Y pixel shaders:** `$Globals` b0 has `_MainTex_TexelSize` at byte offset 320 (`cb0[20]`) and `_SamplingParams` at 368 (`cb0[23]`). `UnityPerCamera` b1 has `_ZBufferParams` at 112 (`cb1[7]`). Texture slots are t0 `_MainTex` and t1 `_HalfResDepth`.
+- **Directional light-shaft pixel shader:** `$Globals` b0 uses `_DS_BetaParams` at 192 (`cb0[12]`), `_DS_AirHazeParams` at 208 (`cb0[13]`), `_DS_LightDirection` at 256 (`cb0[16]`), and `_DS_LightColour` at 272 (`cb0[17]`). `UnityPerCamera` b1 contains camera position at 64 and Z-buffer parameters at 112. `UnityShadows` b2 carries cascade split spheres/radii and world-to-shadow matrices. Textures: t0 `_SamplingOffsets`, t1 `_CameraDepthTexture`, t2 `_ShadowCascades`.
+- **Depth downsample pixel shader:** `$Globals` b0 has `_CameraDepthTexture_TexelSize` at byte offset 448 (`cb0[28]`); t0 is `_CameraDepthTexture`.
+- **Directional-light-shaft vertex shader:** `$Globals` b0 has `_MainTex_TexelSize` at 320, `_SamplingOffsets_TexelSize` at 336, `_ViewportCorner` at 384, `_ViewportRight` at 400, `_ViewportUp` at 416, and `_InterleavedOffset` at 432. The vertex stage also binds `UnityPerCamera` b1, `UnityPerDraw` b2 and `UnityPerFrame` b3.
+
+### Local volumetric-light shader
+
+`Hidden/DS_HazeLightVolume` has a separate set of parameters. Its `$Globals` b0 includes:
+
+| Member | Byte offset | HLSL register |
+|---|---:|---|
+| `_DS_HazeLightVolumeColour` | 176 | `cb0[11]` |
+| `_DS_HazeLightVolumeScattering` | 192 | `cb0[12]` |
+| `_DS_HazeLightVolumeParams0` | 208 | `cb0[13]` |
+| `_DS_HazeCameraDirection` | 224 | `cb0[14]` |
+| `_SamplingOffsets_TexelSize` | 240 | `cb0[15]` |
+| `_DS_HazeSamplingParams` | 256 | `cb0[16]` |
+| `_DS_HazeLightVolumeParams1` | 400 | `cb0[25]` |
+| `_DS_HazeLightVolumeParams2` | 416 | `cb0[26]` |
+| `_DS_HazeDensityParams` | 432 | `cb0[27]` |
+
+Cookie/shadow variants use a matrix at byte offset 432 (`cb0[27..30]`) named `_DS_Haze_WorldToCookie` or `_DS_Haze_WorldToShadow`. The shader also binds `UnityPerCamera`, `UnityPerCameraRare`, and, for shadow variants, `UnityShadows`. Its texture inputs vary by keyword variant and include `_CameraDepthTexture`, `_SamplingOffsets`, `_DensityTexture`, `_LightTexture0`, `_LightTextureB0`, and `_ShadowMapTexture`.
+
+### Separate legacy fog shader
+
+For comparison, `Hidden/Post FX/Fog` uses `$Globals` b0 with `_FogColor` at byte offset 64 (`cb0[4]`), `_Density` at offset 80 (`cb0[5].x`), and `_Start` at offset 84 (`cb0[5].y`). It samples `_MainTex` at t0 and `_CameraDepthTexture` at t1. This confirms that it is a distinct, much simpler effect—not the main DeepSky haze composite.
+
+## 9. What is and is not mapped
+
+**Mapped:** original C# context fields to named Unity shader globals; DX11 vertex/pixel pairing; all six main shader pass responsibilities; the core composite's named constant-buffer slots and byte offsets; its temporal/non-temporal texture inputs; and the key supporting-pass and local-volumetric bindings.
+
+**Remaining:** the exact serialized context values for every scene zone/time variant still need to be consolidated against the scene data before choosing Android defaults. The shader contract itself is now mapped; the mobile implementation has not yet been changed.
 
 No values in the existing experimental `MobileDistanceFog` implementation were adjusted as part of this mapping.
