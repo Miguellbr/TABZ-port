@@ -2,38 +2,31 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Offline bridge for the original TABZ weapon mesh. Reconstructs the original
-/// WeaponHandler reload movement: a Rigidbody is driven toward the recovered
-/// ReloadAimTag with the same MoveRig force/torque calculation.
-/// Original arm bodies/joints are a separate integration step.
+/// Bridges the original AK-74 visual to the recovered TABZ v5.1 physics rig.
+/// The weapon is driven by the original Rifle aim and ReloadAim targets; both
+/// hands are connected to the weapon through ConfigurableJoints by the arms rig.
 /// </summary>
 public class OriginalWeaponVisualBridge : MonoBehaviour
 {
     [Header("Original TABZ asset")]
     [Tooltip("Resources path without extension, e.g. items/Ak74")]
     public string resourcesPrefabPath = "items/Ak74";
-
-    [Header("Recovered AK-74 first-person mount")]
     public Camera viewCamera;
-    public Vector3 localPosition = new Vector3(0.28f, -0.24f, 0.62f);
-    public Vector3 localEulerAngles = Vector3.zero;
-    public Vector3 localScale = Vector3.one;
     public GameObject placeholderToHide;
 
-    [Header("Physics reload")]
-    [Tooltip("Original WeaponHandler uses MoveRig(weapon, reloadAim, 5, 100, true, true).")]
+    [Header("Original WeaponHandler forces")]
+    [Tooltip("AK-74 mReloadTime is 1.5 seconds in the v5.1 player prefab.")]
     public float reloadPositionForce = 5f;
     public float reloadRotationForce = 100f;
-    [Tooltip("Recovered ReloadAimTag local position in Aims, transformed through the original CameraRot 180-degree yaw.")]
-    public Vector3 reloadAimLocalPosition = new Vector3(-0.214f, -0.72f, -0.471f);
-    [Tooltip("Original ReloadAimTag rotation composed with CameraRot's 180-degree yaw.")]
-    public Vector4 reloadAimLocalRotation = new Vector4(-0.2595866f, 0.048887484f, -0.013975345f, -0.9643804f);
+    public float weaponPositionForce = 15f;
+    public float weaponRotationForce = 200f;
 
     private GameObject spawnedWeapon;
     private Transform weaponVisualTransform;
     private Rigidbody weaponBody;
+    private OriginalTabzArmsRig armsRig;
     private Transform reloadAim;
-    private Quaternion weaponBaseRotation;
+    private Transform rifleAim;
     private float recoilStartTime = -1f;
     private bool isReloadMoving;
     private float reloadMoveUntil;
@@ -62,15 +55,16 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
             return;
         }
 
-        spawnedWeapon = Instantiate(prefab, viewCamera.transform, false);
-        spawnedWeapon.name = "TABZ Original Weapon Visual (offline physics)";
+        // The Resources item prefab contains the original AK mesh hierarchy.
+        // The online Weapon component is intentionally not carried into this
+        // offline prototype; the physical root is rebuilt from player-prefab data.
+        spawnedWeapon = Instantiate(prefab, transform, false);
+        spawnedWeapon.name = "TABZ Original AK-74 (offline physics)";
         weaponVisualTransform = spawnedWeapon.transform;
-        weaponVisualTransform.localPosition = localPosition;
-        weaponVisualTransform.localRotation = Quaternion.Euler(localEulerAngles);
-        weaponVisualTransform.localScale = localScale;
-        weaponBaseRotation = weaponVisualTransform.localRotation;
+        weaponVisualTransform.localPosition = Vector3.zero;
+        weaponVisualTransform.localRotation = Quaternion.identity;
+        weaponVisualTransform.localScale = Vector3.one;
 
-        // Strip online/gameplay components but preserve the original render hierarchy.
         Component[] components = spawnedWeapon.GetComponentsInChildren<Component>(true);
         foreach (Component component in components)
         {
@@ -80,11 +74,16 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
                 component is ParticleSystemRenderer || component is TrailRenderer ||
                 component is LineRenderer) continue;
 
-            if (component is Collider collider) { collider.enabled = false; continue; }
+            if (component is Collider collider)
+            {
+                collider.enabled = false;
+                continue;
+            }
+
             if (component is Rigidbody existingBody)
             {
-                existingBody.isKinematic = true;
                 if (existingBody.gameObject == spawnedWeapon) weaponBody = existingBody;
+                else existingBody.isKinematic = true;
                 continue;
             }
 
@@ -106,35 +105,21 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
             }
         }
 
-        // The original AK root has a Rigidbody. Ensure the visual can be moved
-        // by the same force/torque path even if the imported component was stripped.
         if (weaponBody == null) weaponBody = spawnedWeapon.AddComponent<Rigidbody>();
+        weaponBody.mass = 2f;
+        weaponBody.drag = 0f;
+        weaponBody.angularDrag = 0.05f;
+        weaponBody.useGravity = true;
         weaponBody.isKinematic = false;
-        weaponBody.useGravity = false;
+        weaponBody.constraints = RigidbodyConstraints.None;
 
-        // Keep the rigidbody in player space, not parented to the camera. Its
-        // normal target is updated from the camera each physics tick.
-        Transform playerRoot = transform;
-        spawnedWeapon.transform.SetParent(playerRoot, true);
-        CreateRecoveredReloadAim();
+        armsRig = gameObject.AddComponent<OriginalTabzArmsRig>();
+        armsRig.Initialize(viewCamera, weaponBody, weaponVisualTransform);
+        reloadAim = armsRig.ReloadAim;
+        rifleAim = armsRig.RifleAim;
 
         if (placeholderToHide != null) placeholderToHide.SetActive(false);
-        Debug.Log("OriginalWeaponVisualBridge: loaded AK visual and physics reload bridge.");
-    }
-
-    private void CreateRecoveredReloadAim()
-    {
-        GameObject aim = new GameObject("Recovered TABZ ReloadAimTag");
-        reloadAim = aim.transform;
-        // Original hierarchy: PlayerRoot/CameraHolder(y=2.1135998)/CameraRot(180° Y)/CameraForce/Aims/RELOAD.
-        // reloadAimLocalPosition already includes CameraRot's 180° yaw; add the recovered holder height.
-        reloadAim.SetParent(transform, false);
-        reloadAim.localPosition = new Vector3(reloadAimLocalPosition.x,
-            2.1135998f + reloadAimLocalPosition.y, reloadAimLocalPosition.z);
-        reloadAim.localRotation = new Quaternion(
-            reloadAimLocalRotation.x, reloadAimLocalRotation.y,
-            reloadAimLocalRotation.z, reloadAimLocalRotation.w);
-        reloadAim.localScale = Vector3.one;
+        Debug.Log("OriginalWeaponVisualBridge: " + GetDiagnosticStatus());
     }
 
     public void PlayFireRecoil()
@@ -150,82 +135,71 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
         reloadMoveUntil = Time.time + Mathf.Max(0.1f, duration);
     }
 
-    private void FixedUpdate()
+    private void Update()
     {
         if (weaponBody == null || viewCamera == null || weaponVisualTransform == null) return;
 
         if (isReloadMoving && Time.time < reloadMoveUntil)
         {
+            // WeaponHandler.ReloadMoveRigCoroutine uses Time.deltaTime here.
             MoveRig(weaponBody, reloadAim, reloadPositionForce, reloadRotationForce, true, true);
         }
         else
         {
             isReloadMoving = false;
-            Vector3 mountPosition = viewCamera.transform.TransformPoint(localPosition);
-            Quaternion mountRotation = viewCamera.transform.rotation * Quaternion.Euler(localEulerAngles);
-            MoveRigToPose(weaponBody, mountPosition, mountRotation, 5f, 100f, false);
+            MoveWeaponToOriginalAim();
         }
-    }
 
-    // This is the original WeaponHandler.MoveRig calculation, retained verbatim
-    // in its force/torque structure (including the first-child forward vector).
-    private void MoveRig(Rigidbody rig, Transform target, float force, float torque, bool fixer, bool fixedTime)
-    {
-        float delta = fixedTime ? Time.fixedDeltaTime : 0.0166f;
-        Vector3 forward = rig.transform.forward;
-        if (fixer && rig.transform.childCount > 0)
-            forward = rig.transform.GetChild(0).forward;
-        float angle = Vector3.Angle(forward, target.forward);
-        Vector3 axis = Vector3.Cross(forward, target.forward);
-        rig.AddTorque(axis * angle * torque * delta, ForceMode.VelocityChange);
-        Vector3 offset = target.position - rig.position;
-        rig.AddForce(offset * force, ForceMode.VelocityChange);
-    }
-
-    private void MoveRigToPose(Rigidbody rig, Vector3 position, Quaternion rotation,
-        float force, float torque, bool fixedTime)
-    {
-        float delta = fixedTime ? Time.fixedDeltaTime : 0.0166f;
-        // Normal weapon holding uses fixer=false in the original MoveRig,
-        // so it aligns the Rigidbody root's forward axis, not the mesh child.
-        Vector3 forward = rig.transform.forward;
-        Vector3 targetForward = rotation * Vector3.forward;
-        float angle = Vector3.Angle(forward, targetForward);
-        Vector3 axis = Vector3.Cross(forward, targetForward);
-        rig.AddTorque(axis * angle * torque * delta, ForceMode.VelocityChange);
-        rig.AddForce((position - rig.position) * force, ForceMode.VelocityChange);
-    }
-
-    private void Update()
-    {
-        if (weaponVisualTransform == null || recoilStartTime < 0f) return;
-        // Recoil remains a recovered transient camera/weapon effect. It is
-        // temporarily skipped while the rigidbody is performing the reload.
-        if (isReloadMoving) return;
-
+        if (recoilStartTime < 0f || isReloadMoving) return;
         float elapsed = Time.time - recoilStartTime;
         float normalizedTime = Mathf.Clamp01(elapsed / OriginalAk74ForceShakeTime);
         float curveValue = originalAk74RecoilCurve.Evaluate(normalizedTime);
         weaponBody.AddTorque(-viewCamera.transform.right *
             originalAk74ForceShake.x * curveValue, ForceMode.VelocityChange);
 
-        if (elapsed >= OriginalAk74ForceShakeTime)
-        {
-            recoilStartTime = -1f;
-        }
+        if (elapsed >= OriginalAk74ForceShakeTime) recoilStartTime = -1f;
+    }
+
+    private void MoveWeaponToOriginalAim()
+    {
+        if (rifleAim == null) return;
+
+        // WeaponHandler.MoveWeapon's extra up-axis alignment torque.
+        float angle = Vector3.Angle(weaponBody.transform.up, rifleAim.up);
+        Vector3 axis = Vector3.Cross(weaponBody.transform.up, rifleAim.up);
+        weaponBody.AddTorque(axis * angle * weaponRotationForce * 0.0166f,
+            ForceMode.VelocityChange);
+
+        // Original player prefab: weaponPositionForce=15, AK-74 weaponRotationForce=200.
+        MoveRig(weaponBody, rifleAim, weaponPositionForce, weaponRotationForce, false, false);
+    }
+
+    // Original WeaponHandler.MoveRig force/torque structure.
+    private void MoveRig(Rigidbody rig, Transform target, float force, float torque,
+        bool fixer, bool useFrameDelta)
+    {
+        float delta = useFrameDelta ? Time.deltaTime : 0.0166f;
+        Vector3 forward = rig.transform.forward;
+        if (fixer && rig.transform.childCount > 0)
+            forward = rig.transform.GetChild(0).forward;
+        float angle = Vector3.Angle(forward, target.forward);
+        Vector3 axis = Vector3.Cross(forward, target.forward);
+        rig.AddTorque(axis * angle * torque * delta, ForceMode.VelocityChange);
+        rig.AddForce((target.position - rig.position) * force, ForceMode.VelocityChange);
     }
 
     public string GetDiagnosticStatus()
     {
-        return "Rig físico: " + (weaponBody != null ? "Rigidbody OK" : "sem Rigidbody") +
+        return "AK Rigidbody: " + (weaponBody != null ? "OK" : "ausente") +
+            " | Aim: " + (rifleAim != null ? "OK" : "ausente") +
             " | ReloadAim: " + (reloadAim != null ? "OK" : "ausente") +
-            " | Movimento de recarga: " + (isReloadMoving ? "ativo" : "inativo") +
-            " | AK visual: " + (spawnedWeapon != null ? "carregada" : "não carregada");
+            " | Recarga física: " + (isReloadMoving ? "ativa" : "inativa") +
+            " | " + (armsRig != null ? armsRig.GetDiagnosticStatus() : "rig de braços ausente");
     }
 
     private void OnDestroy()
     {
         if (spawnedWeapon != null) Destroy(spawnedWeapon);
-        if (reloadAim != null) Destroy(reloadAim.gameObject);
+        if (armsRig != null) Destroy(armsRig);
     }
 }
