@@ -1,0 +1,37 @@
+name: Import original TABZ arm mesh
+on:
+  push:
+    paths:
+      - ".github/workflows/import-original-arms.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original v5.1 export artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/Miguellbr/TABZ-port/actions/artifacts/11677758394/zip \
+            -o /tmp/tabz-original.zip
+      - name: Copy only the original arm mesh and material
+        run: |
+          mkdir -p MobilePort/Assets/Resources/OriginalRig
+          unzip -p /tmp/tabz-original.zip v5.1/ExportedProject/Assets/Mesh/RealHumanBean_0.asset > MobilePort/Assets/Resources/OriginalRig/RealHumanBean_0.asset
+          unzip -p /tmp/tabz-original.zip v5.1/ExportedProject/Assets/Mesh/RealHumanBean_0.asset.meta > MobilePort/Assets/Resources/OriginalRig/RealHumanBean_0.asset.meta
+          unzip -p /tmp/tabz-original.zip v5.1/ExportedProject/Assets/Material/redd.mat > MobilePort/Assets/Resources/OriginalRig/redd.mat
+          unzip -p /tmp/tabz-original.zip v5.1/ExportedProject/Assets/Material/redd.mat.meta > MobilePort/Assets/Resources/OriginalRig/redd.mat.meta
+          test -s MobilePort/Assets/Resources/OriginalRig/RealHumanBean_0.asset
+          test -s MobilePort/Assets/Resources/OriginalRig/redd.mat
+      - name: Commit imported assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MobilePort/Assets/Resources/OriginalRig
+          git commit -m "Import original TABZ v5.1 arm mesh assets" || exit 0
+          git push
