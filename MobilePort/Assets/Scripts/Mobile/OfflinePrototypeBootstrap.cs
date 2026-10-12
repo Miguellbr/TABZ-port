@@ -25,6 +25,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
     private Text hotbarText;
     private int selectedSlot;
     private Text fpsText;
+    private MobileDistanceFog distanceFog;
     private Text performanceStatus;
     private GameObject performancePanel;
     private bool showFps = true;
@@ -125,6 +126,8 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
         gameObject.AddComponent<OriginalTabzEnvironment>();
+        distanceFog = cameraObject.AddComponent<MobileDistanceFog>();
+        ApplyFogSettings();
         SpawnZombie();
     }
 
@@ -229,11 +232,9 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
 
     private void ApplyFogSettings()
     {
-        RenderSettings.fog = fogEnabled;
-        // Original preserves the recovered MyDay coefficient; Low/High are
-        // experimental multipliers for mobile performance testing.
-        float[] profileMultipliers = { 0.5f, 1f, 1.5f };
-        RenderSettings.fogDensity = 0.05f * profileMultipliers[fogProfile];
+        if (distanceFog == null) return;
+        distanceFog.SetFog(fogEnabled);
+        distanceFog.SetProfile(fogProfile);
     }
 
     private GameObject BuildInventoryPanel(Transform parent)
