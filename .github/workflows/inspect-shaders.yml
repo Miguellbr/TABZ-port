@@ -33,6 +33,9 @@ jobs:
           import re
           from pathlib import Path
           import UnityPy
+          from UnityPy.export.ShaderConverter import ShaderProgram
+          from UnityPy.helpers import CompressionHelper
+          from UnityPy.streams import EndianBinaryReader
 
           report = {"files": [], "shaders": [], "errors": []}
           out = Path("exported-shaders")
@@ -63,6 +66,28 @@ jobs:
                               source = shader.export()
                               target = target_dir / f"{safe}_{obj.path_id}.shader"
                               target.write_text(source, encoding="utf-8", errors="replace")
+                              dxbc_count = 0
+                              if name in ("Hidden/DS_Haze", "Hidden/DS_HazeLightVolume", "Hidden/Post FX/Fog"):
+                                  for platform_index, platform in enumerate(shader.platforms):
+                                      if platform != 4:
+                                          continue
+                                      compressed_size = shader.compressedLengths[platform_index]
+                                      decompressed_size = shader.decompressedLengths[platform_index]
+                                      offset = shader.offsets[platform_index]
+                                      compressed = bytes(shader.compressedBlob)[offset:offset + compressed_size]
+                                      decompressed = CompressionHelper.decompress_lz4(compressed, decompressed_size)
+                                      program = ShaderProgram(EndianBinaryReader(decompressed, endian="<"), shader.object_reader.version)
+                                      dxbc_dir = Path("raw-dxbc") / root.name / safe / f"platform-{platform}"
+                                      dxbc_dir.mkdir(parents=True, exist_ok=True)
+                                      for sub_index, subprogram in enumerate(program.m_SubPrograms):
+                                          code = bytes(subprogram.m_ProgramCode)
+                                          if not code:
+                                              continue
+                                          program_type = getattr(subprogram.m_ProgramType, "name", str(subprogram.m_ProgramType))
+                                          output = dxbc_dir / f"program-{sub_index}-{program_type}.bin"
+                                          output.write_bytes(code)
+                                          dxbc_count += 1
+                                          print("DXBC_EXTRACT", root.name, name, sub_index, program_type, len(code), code[:4].hex(), ",".join(subprogram.m_Keywords))
                               report["shaders"].append({
                                   "version": root.name,
                                   "file": path.relative_to(root).as_posix(),
@@ -71,6 +96,7 @@ jobs:
                                   "serialized_size": getattr(obj, "byte_size", None),
                                   "export_file": target.relative_to(out).as_posix(),
                                   "export_chars": len(source),
+                                  "dxbc_programs_extracted": dxbc_count,
                                   "has_haze_terms": bool(re.search(r"haze|fog|deep.?sky|extinction|scattering", name + "\\n" + source, re.I)),
                               })
                           except Exception as exc:
@@ -82,6 +108,7 @@ jobs:
               "shader_objects": len(report["shaders"]),
               "shader_exports": sum(1 for x in report["shaders"] if x.get("export_chars")),
               "haze_term_matches": sum(1 for x in report["shaders"] if x.get("has_haze_terms")),
+              "dxbc_programs_extracted": sum(x.get("dxbc_programs_extracted", 0) for x in report["shaders"]),
               "errors": len(report["errors"]),
           }
           Path("shader-report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -97,4 +124,5 @@ jobs:
           path: |
             shader-report.json
             exported-shaders/
+            raw-dxbc/
           retention-days: 14
