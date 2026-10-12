@@ -31,7 +31,6 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
     private GameObject performancePanel;
     private bool showFps = true;
     private bool fogEnabled = true;
-    private int fogProfile = 1;
     private float fpsUpdateTimer;
     private int fpsFrameCount;
 
@@ -86,8 +85,8 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         }
 
         if (performanceStatus != null)
-            performanceStatus.text = "Névoa: " + (fogEnabled ? "Ligada" : "Desligada") +
-                " | Intensidade: " + GetFogProfileName() +
+            performanceStatus.text = "Contexto original: mapa geral / MyDay" +
+                " | Névoa: " + (fogEnabled ? "Normal" : "Início a 5 m") +
                 " | FPS: " + (showFps ? "Visível" : "Oculto");
         if (fogDiagnosticText != null && performancePanel != null && performancePanel.activeSelf)
             fogDiagnosticText.text = distanceFog != null
@@ -224,9 +223,6 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         MakeButton("ATIVAR / DESATIVAR NÉVOA", panel.transform,
             new Vector2(0.12f, 0.27f), new Vector2(0.88f, 0.37f),
             () => { fogEnabled = !fogEnabled; ApplyFogSettings(); });
-        MakeButton("ALTERAR INTENSIDADE", panel.transform,
-            new Vector2(0.12f, 0.16f), new Vector2(0.88f, 0.25f),
-            () => { fogProfile = (fogProfile + 1) % 3; ApplyFogSettings(); });
         MakeButton("FPS: MOSTRAR / OCULTAR", panel.transform,
             new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.14f),
             () => { showFps = !showFps; if (fpsText != null) fpsText.enabled = showFps; });
@@ -242,25 +238,16 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
             ? distanceFog.GetDiagnosticStatus()
             : "Componente MobileDistanceFog não encontrado";
         diagnostic += "\\nNévoa: " + (fogEnabled ? "Ligada" : "Desligada");
-        diagnostic += "\\nIntensidade: " + GetFogProfileName();
         diagnostic += "\\nDispositivo: " + SystemInfo.deviceModel;
         GUIUtility.systemCopyBuffer = diagnostic;
         if (fogDiagnosticText != null)
             fogDiagnosticText.text = diagnostic + "\\n\\nCopiado! Pode colar aqui.";
     }
 
-    private string GetFogProfileName()
-    {
-        if (fogProfile == 0) return "Baixa";
-        if (fogProfile == 1) return "Média";
-        return "Alta";
-    }
-
     private void ApplyFogSettings()
     {
         if (distanceFog == null) return;
         distanceFog.SetFog(fogEnabled);
-        distanceFog.SetProfile(fogProfile);
     }
 
     private GameObject BuildInventoryPanel(Transform parent)
