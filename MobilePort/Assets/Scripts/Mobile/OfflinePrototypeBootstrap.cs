@@ -94,6 +94,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         light.intensity = 1.15f;
         lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
+        gameObject.AddComponent<OriginalTabzEnvironment>();
         SpawnZombie();
     }
 
@@ -145,6 +146,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         OriginalWeaponVisualBridge originalWeapon = player.gameObject.AddComponent<OriginalWeaponVisualBridge>();
         originalWeapon.viewCamera = player.viewCamera;
         originalWeapon.resourcesPrefabPath = "items/Ak74";
+        weapon.onFire = originalWeapon.PlayFireRecoil;
     }
 
     private GameObject BuildInventoryPanel(Transform parent)
