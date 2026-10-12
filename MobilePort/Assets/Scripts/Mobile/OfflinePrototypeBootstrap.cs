@@ -213,7 +213,10 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         performanceStatus = MakeText("Performance Status", panel.transform, "", 15,
             new Vector2(0.12f, 0.69f), new Vector2(0.88f, 0.77f), TextAnchor.MiddleCenter);
         fogDiagnosticText = MakeText("Fog Diagnostics", panel.transform, "Verificando efeito da câmera...", 12,
-            new Vector2(0.08f, 0.47f), new Vector2(0.92f, 0.67f), TextAnchor.MiddleCenter);
+            new Vector2(0.08f, 0.51f), new Vector2(0.92f, 0.68f), TextAnchor.MiddleCenter);
+        MakeButton("COPIAR DIAGNÓSTICO", panel.transform,
+            new Vector2(0.22f, 0.43f), new Vector2(0.78f, 0.50f),
+            CopyFogDiagnostic);
 
         MakeButton("ATIVAR / DESATIVAR NÉVOA", panel.transform,
             new Vector2(0.12f, 0.38f), new Vector2(0.88f, 0.51f),
@@ -228,6 +231,19 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
             new Vector2(0.68f, 0.01f), new Vector2(0.92f, 0.08f),
             () => panel.SetActive(false));
         return panel;
+    }
+
+    private void CopyFogDiagnostic()
+    {
+        string diagnostic = distanceFog != null
+            ? distanceFog.GetDiagnosticStatus()
+            : "Componente MobileDistanceFog não encontrado";
+        diagnostic += "\\nNévoa: " + (fogEnabled ? "Ligada" : "Desligada");
+        diagnostic += "\\nIntensidade: " + GetFogProfileName();
+        diagnostic += "\\nDispositivo: " + SystemInfo.deviceModel;
+        GUIUtility.systemCopyBuffer = diagnostic;
+        if (fogDiagnosticText != null)
+            fogDiagnosticText.text = diagnostic + "\\n\\nCopiado! Pode colar aqui.";
     }
 
     private string GetFogProfileName()
