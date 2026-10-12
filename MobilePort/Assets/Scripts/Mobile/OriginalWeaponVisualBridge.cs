@@ -65,6 +65,15 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
         weaponVisualTransform.localRotation = Quaternion.identity;
         weaponVisualTransform.localScale = Vector3.one;
 
+        // In the original player prefab ADS_Position was child zero. MoveRig's
+        // fixer=true path reads that child's forward vector during reload.
+        GameObject adsPosition = new GameObject("ADS_Position");
+        adsPosition.transform.SetParent(weaponVisualTransform, false);
+        adsPosition.transform.localPosition = new Vector3(-0.00000034916f, 0.0755f, -0.42788f);
+        adsPosition.transform.localRotation = Quaternion.identity;
+        adsPosition.transform.localScale = Vector3.one * 0.8117157f;
+        adsPosition.transform.SetAsFirstSibling();
+
         Component[] components = spawnedWeapon.GetComponentsInChildren<Component>(true);
         foreach (Component component in components)
         {
