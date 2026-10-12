@@ -70,7 +70,7 @@ The original C# source shows the exact named Unity globals populated from each b
 
 For exponential height falloff, the three initial-density factors are calculated at the camera's world height:
 
-``exp(-airFalloff * abs(cameraY))`, `exp(-hazeFalloff * abs(cameraY))`, and `exp(-fogFalloff * abs(cameraY))`.
+`exp(-airFalloff * abs(cameraY))`, `exp(-hazeFalloff * abs(cameraY))`, and `exp(-fogFalloff * abs(cameraY))`.
 
 When height falloff is disabled, all three factors are 1.
 
