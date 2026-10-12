@@ -193,6 +193,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         originalWeapon.viewCamera = player.viewCamera;
         originalWeapon.resourcesPrefabPath = "items/Ak74";
         weapon.onFire = originalWeapon.PlayFireRecoil;
+        weapon.onReloadStarted = originalWeapon.BeginPhysicsReload;
     }
 
     private GameObject BuildPerformancePanel(Transform parent)
