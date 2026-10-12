@@ -75,7 +75,8 @@ jobs:
                   name_index = getattr(parameter, "m_NameIndex", None)
                   row = {
                       "name": index_to_name.get(name_index, f"<name-index-{name_index}>"),
-                      "offset": getattr(parameter, "m_Index", None),
+                      "register_index": getattr(parameter, "m_Index", None),
+                      "byte_offset": getattr(parameter, "m_OffsetInConstantBuffer", None),
                       "array_size": getattr(parameter, "m_ArraySize", 0),
                   }
                   if matrix:
@@ -84,6 +85,30 @@ jobs:
                       row["dimension"] = getattr(parameter, "m_Dim", None)
                   rows.append(row)
               return rows
+
+          def parameter_layout(source, index_to_name):
+              if source is None:
+                  return {}
+              result = {"constant_buffer_bindings": [], "constant_buffers": []}
+              for binding in getattr(source, "m_ConstantBufferBindings", []) or []:
+                  ni = getattr(binding, "m_NameIndex", None)
+                  result["constant_buffer_bindings"].append({
+                      "name": index_to_name.get(ni, f"<name-index-{ni}>"),
+                      "slot": getattr(binding, "m_Index", None),
+                  })
+              for buffer in getattr(source, "m_ConstantBuffers", []) or []:
+                  ni = getattr(buffer, "m_NameIndex", None)
+                  result["constant_buffers"].append({
+                      "name": index_to_name.get(ni, f"<name-index-{ni}>"),
+                      "size_bytes": getattr(buffer, "m_Size", None),
+                      "vectors": named_parameter_rows(getattr(buffer, "m_VectorParams", []), index_to_name),
+                      "matrices": named_parameter_rows(getattr(buffer, "m_MatrixParams", []), index_to_name, matrix=True),
+                  })
+              for field in ("m_TextureParams", "m_Samplers", "m_BufferParams", "m_UAVParams"):
+                  value = getattr(source, field, None)
+                  if value is not None:
+                      result[field] = plain(value)
+              return result
 
           def stage_info(stage, index_to_name):
               if stage is None:
@@ -100,31 +125,13 @@ jobs:
                       else:
                           value = plain(value)
                       row[field] = value
+                  params = getattr(sub, "m_Parameters", None)
+                  row["parameter_layout"] = parameter_layout(params, index_to_name) if params is not None else parameter_layout(sub, index_to_name)
                   entries.append(row)
 
               common = getattr(stage, "m_CommonParameters", None)
-              common_data = {"constant_buffer_bindings": [], "constant_buffers": []}
-              if common is not None:
-                  for binding in getattr(common, "m_ConstantBufferBindings", []) or []:
-                      ni = getattr(binding, "m_NameIndex", None)
-                      common_data["constant_buffer_bindings"].append({
-                          "name": index_to_name.get(ni, f"<name-index-{ni}>"),
-                          "slot": getattr(binding, "m_Index", None),
-                      })
-                  for buffer in getattr(common, "m_ConstantBuffers", []) or []:
-                      ni = getattr(buffer, "m_NameIndex", None)
-                      common_data["constant_buffers"].append({
-                          "name": index_to_name.get(ni, f"<name-index-{ni}>"),
-                          "size_bytes": getattr(buffer, "m_Size", None),
-                          "vectors": named_parameter_rows(getattr(buffer, "m_VectorParams", []), index_to_name),
-                          "matrices": named_parameter_rows(getattr(buffer, "m_MatrixParams", []), index_to_name, matrix=True),
-                      })
-                  for field in ("m_TextureParams", "m_Samplers", "m_BufferParams", "m_UAVParams"):
-                      value = getattr(common, field, None)
-                      if value is not None:
-                          common_data[field] = plain(value)
+              common_data = parameter_layout(common, index_to_name)
               return {"common_parameters": common_data, "variants": entries}
-
           def get_attr(obj, *names):
               for name in names:
                   value = getattr(obj, name, None)
