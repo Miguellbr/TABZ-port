@@ -242,7 +242,16 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         intensitySlider.value = 1f;
         intensitySlider.wholeNumbers = false;
         intensitySlider.direction = Slider.Direction.LeftToRight;
-        intensitySlider.targetGraphic = sliderTrack;
+        GameObject handleObject = new GameObject("Handle");
+        handleObject.transform.SetParent(sliderObject.transform, false);
+        RectTransform handleRect = handleObject.AddComponent<RectTransform>();
+        handleRect.anchorMin = new Vector2(0f, 0.5f);
+        handleRect.anchorMax = new Vector2(0f, 0.5f);
+        handleRect.sizeDelta = new Vector2(26f, 34f);
+        Image handleImage = handleObject.AddComponent<Image>();
+        handleImage.color = Color.white;
+        intensitySlider.handleRect = handleRect;
+        intensitySlider.targetGraphic = handleImage;
         intensitySlider.onValueChanged.AddListener(value =>
         {
             if (distanceFog != null) distanceFog.SetIntensity(value);
