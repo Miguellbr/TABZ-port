@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - ".github/workflows/import-original-arms.yml"
+      - "MobilePort/Assets/Scripts/Mobile/OriginalTabzArmsRig.cs"
+      - "MobilePort/Assets/Scripts/Mobile/OriginalWeaponVisualBridge.cs"
   workflow_dispatch:
 permissions:
   contents: write
