@@ -26,14 +26,17 @@ jobs:
         run: gh run download 38002674886 --repo Miguellbr/TABZ-port --name tabz-extracted-two-versions --dir extracted
       - name: Install Unity asset parser
         run: python -m pip install UnityPy
-      - name: Inspect serialized Shader objects
+      - name: Export original Shader objects
         run: |
           python - <<'PY'
           import json
+          import re
           from pathlib import Path
           import UnityPy
 
           report = {"files": [], "shaders": [], "errors": []}
+          out = Path("exported-shaders")
+          out.mkdir(exist_ok=True)
           roots = [Path("extracted/version-1"), Path("extracted/version-2")]
           for root in roots:
               if not root.exists():
@@ -48,55 +51,45 @@ jobs:
                           if obj.type.name != "Shader":
                               continue
                           try:
-                              data = obj.read()
-                              if len(report["shaders"]) < 3:
-                                  print("SHADER_PATH", getattr(data, "m_PathName", None))
-                                  print("SHADER_SCRIPT", repr(getattr(data, "m_Script", None))[:2000])
-                                  print("SHADER_GUID", repr(getattr(data, "m_AssetGUID", None)))
-                                  parsed = getattr(data, "m_ParsedForm", None)
-                                  print("PARSED_TYPE", type(parsed))
-                                  print("PARSED_REPR", repr(parsed)[:12000])
-                                  try:
-                                      print("PARSED_DIR", [x for x in dir(parsed) if not x.startswith("__")][:100])
-                                      print("PARSED_VARS", repr(vars(parsed))[:12000])
-                                  except Exception as debug_exc:
-                                      print("PARSED_DEBUG_ERROR", repr(debug_exc))
-                                  print("PLATFORMS", repr(getattr(data, "platforms", None))[:2000])
-                                  print("OFFSETS", repr(getattr(data, "offsets", None))[:2000])
-                                  print("COMPRESSED_LENGTHS", repr(getattr(data, "compressedLengths", None))[:2000])
-                                  print("DECOMPRESSED_LENGTHS", repr(getattr(data, "decompressedLengths", None))[:2000])
-                                  print("DECOMPRESSED_SIZE", repr(getattr(data, "decompressedSize", None)))
-                                  try:
-                                      exported = data.export()
-                                      print("SHADER_EXPORT_TYPE", type(exported))
-                                      print("SHADER_EXPORT", repr(exported)[:12000])
-                                  except Exception as export_exc:
-                                      print("SHADER_EXPORT_ERROR", repr(export_exc))
-                                  try:
-                                      raw = obj.get_raw_data()
-                                      print("SHADER_RAW", len(raw), raw[:64].hex())
-                                  except Exception as raw_exc:
-                                      print("SHADER_RAW_ERROR", repr(raw_exc))
-                              fields = {}
-                              for key in ("m_Name", "m_ParsedForm", "compressedBlob", "platforms", "offset", "compressedLengths", "decompressedLengths"):
-                                  if hasattr(data, key):
-                                      value = getattr(data, key)
-                                      if isinstance(value, (bytes, bytearray)):
-                                          fields[key] = {"bytes": len(value), "prefix_hex": bytes(value[:32]).hex()}
-                                      elif isinstance(value, (str, int, float, bool)) or value is None:
-                                          fields[key] = value
-                                      else:
-                                          fields[key] = str(value)[:1000]
-                              report["shaders"].append({"version": root.name, "file": path.relative_to(root).as_posix(), "path_id": obj.path_id, "serialized_size": getattr(obj, "byte_size", None), "fields": fields})
+                              shader = obj.parse_as_object()
+                              parsed = getattr(shader, "m_ParsedForm", None)
+                              name = getattr(parsed, "m_Name", "") if parsed else ""
+                              if not name:
+                                  name = obj.peek_name() or f"unnamed-{obj.path_id}"
+                              safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("._") or f"unnamed-{obj.path_id}"
+                              relative = path.relative_to(root).with_suffix("")
+                              target_dir = out / root.name / relative
+                              target_dir.mkdir(parents=True, exist_ok=True)
+                              source = shader.export()
+                              target = target_dir / f"{safe}_{obj.path_id}.shader"
+                              target.write_text(source, encoding="utf-8", errors="replace")
+                              report["shaders"].append({
+                                  "version": root.name,
+                                  "file": path.relative_to(root).as_posix(),
+                                  "path_id": obj.path_id,
+                                  "name": name,
+                                  "serialized_size": getattr(obj, "byte_size", None),
+                                  "export_file": target.relative_to(out).as_posix(),
+                                  "export_chars": len(source),
+                                  "has_haze_terms": bool(re.search(r"haze|fog|deep.?sky|extinction|scattering", name + "\\n" + source, re.I)),
+                              })
                           except Exception as exc:
                               report["errors"].append(f"{path}:{obj.path_id}: {type(exc).__name__}: {exc}")
                   except Exception as exc:
                       report["errors"].append(f"{path}: {type(exc).__name__}: {exc}")
-          report["summary"] = {"serialized_files": len(report["files"]), "shader_objects": len(report["shaders"]), "errors": len(report["errors"])}
+          report["summary"] = {
+              "serialized_files": len(report["files"]),
+              "shader_objects": len(report["shaders"]),
+              "shader_exports": sum(1 for x in report["shaders"] if x.get("export_chars")),
+              "haze_term_matches": sum(1 for x in report["shaders"] if x.get("has_haze_terms")),
+              "errors": len(report["errors"]),
+          }
           Path("shader-report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
           print(json.dumps(report["summary"], indent=2))
           for shader in report["shaders"]:
-              print(shader["version"], shader["file"], shader["path_id"], shader["fields"].get("m_Name"), shader["serialized_size"])
+              print(shader["version"], shader["name"], shader["file"], shader["path_id"], shader["export_chars"], "HAZE" if shader["has_haze_terms"] else "")
+          for error in report["errors"][:30]:
+              print("ERROR", error)
           PY
       - uses: actions/upload-artifact@v4
         with:
