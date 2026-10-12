@@ -27,6 +27,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
     private Text fpsText;
     private MobileDistanceFog distanceFog;
     private Text performanceStatus;
+    private Text fogDiagnosticText;
     private GameObject performancePanel;
     private bool showFps = true;
     private bool fogEnabled = true;
@@ -86,8 +87,12 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
 
         if (performanceStatus != null)
             performanceStatus.text = "Névoa: " + (fogEnabled ? "Ligada" : "Desligada") +
-                "\nIntensidade: " + GetFogProfileName() +
-                "\nFPS: " + (showFps ? "Visível" : "Oculto");
+                " | Intensidade: " + GetFogProfileName() +
+                " | FPS: " + (showFps ? "Visível" : "Oculto");
+        if (fogDiagnosticText != null && performancePanel != null && performancePanel.activeSelf)
+            fogDiagnosticText.text = distanceFog != null
+                ? distanceFog.GetDiagnosticStatus()
+                : "Componente MobileDistanceFog não encontrado";
     }
 
     private void BuildWorld()
@@ -205,8 +210,10 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
 
         MakeText("Performance Title", panel.transform, "DESEMPENHO", 25,
             new Vector2(0.08f, 0.78f), new Vector2(0.92f, 0.96f), TextAnchor.MiddleCenter);
-        performanceStatus = MakeText("Performance Status", panel.transform, "", 18,
-            new Vector2(0.12f, 0.53f), new Vector2(0.88f, 0.77f), TextAnchor.MiddleCenter);
+        performanceStatus = MakeText("Performance Status", panel.transform, "", 15,
+            new Vector2(0.12f, 0.69f), new Vector2(0.88f, 0.77f), TextAnchor.MiddleCenter);
+        fogDiagnosticText = MakeText("Fog Diagnostics", panel.transform, "Verificando efeito da câmera...", 12,
+            new Vector2(0.08f, 0.47f), new Vector2(0.92f, 0.67f), TextAnchor.MiddleCenter);
 
         MakeButton("ATIVAR / DESATIVAR NÉVOA", panel.transform,
             new Vector2(0.12f, 0.38f), new Vector2(0.88f, 0.51f),
