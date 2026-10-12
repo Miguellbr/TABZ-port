@@ -28,6 +28,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
     private MobileDistanceFog distanceFog;
     private Text performanceStatus;
     private Text fogDiagnosticText;
+    private Text fogIntensityLabel;
     private GameObject performancePanel;
     private bool showFps = true;
     private bool fogEnabled = true;
@@ -224,6 +225,31 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         MakeButton("ATIVAR / DESATIVAR NÉVOA", panel.transform,
             new Vector2(0.12f, 0.27f), new Vector2(0.88f, 0.37f),
             () => { fogEnabled = !fogEnabled; ApplyFogSettings(); });
+        fogIntensityLabel = MakeText("Fog Intensity Label", panel.transform, "INTENSIDADE DA NÉVOA: 100%", 14,
+            new Vector2(0.12f, 0.205f), new Vector2(0.88f, 0.255f), TextAnchor.MiddleCenter);
+        GameObject sliderObject = new GameObject("Fog Intensity Slider");
+        sliderObject.transform.SetParent(panel.transform, false);
+        RectTransform sliderRect = sliderObject.AddComponent<RectTransform>();
+        sliderRect.anchorMin = new Vector2(0.16f, 0.155f);
+        sliderRect.anchorMax = new Vector2(0.84f, 0.195f);
+        sliderRect.offsetMin = Vector2.zero;
+        sliderRect.offsetMax = Vector2.zero;
+        Image sliderTrack = sliderObject.AddComponent<Image>();
+        sliderTrack.color = new Color(0.22f, 0.24f, 0.22f, 1f);
+        Slider intensitySlider = sliderObject.AddComponent<Slider>();
+        intensitySlider.minValue = 0f;
+        intensitySlider.maxValue = 2f;
+        intensitySlider.value = 1f;
+        intensitySlider.wholeNumbers = false;
+        intensitySlider.direction = Slider.Direction.LeftToRight;
+        intensitySlider.targetGraphic = sliderTrack;
+        intensitySlider.onValueChanged.AddListener(value =>
+        {
+            if (distanceFog != null) distanceFog.SetIntensity(value);
+            if (fogIntensityLabel != null)
+                fogIntensityLabel.text = "INTENSIDADE DA NÉVOA: " + Mathf.RoundToInt(value * 100f) + "%";
+        });
+
         MakeButton("FPS: MOSTRAR / OCULTAR", panel.transform,
             new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.14f),
             () => { showFps = !showFps; if (fpsText != null) fpsText.enabled = showFps; });
