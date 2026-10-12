@@ -21,6 +21,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: gh run download 38301772658 --repo Miguellbr/TABZ-port --name tabz-decompiled-haze-hlsl --dir decompiled
+      - name: Download Unity ShaderLab exports
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh run download 38301772658 --repo Miguellbr/TABZ-port --name tabz-original-shader-report --dir original-report
+      - name: Print original ShaderLab metadata
+        shell: pwsh
+        run: |
+          $targets = Get-ChildItem -Path "original-report/exported-shaders" -Recurse -Filter "Hidden_DS_Haze_*.shader"
+          $targets += Get-ChildItem -Path "original-report/exported-shaders" -Recurse -Filter "Hidden_DS_HazeLightVolume_*.shader"
+          $targets += Get-ChildItem -Path "original-report/exported-shaders" -Recurse -Filter "Hidden_Post_FX_Fog_*.shader"
+          foreach ($file in $targets | Where-Object { $_.FullName -match "version-2" }) {
+            Write-Host "===== BEGIN SHADERLAB $($file.FullName) ====="
+            Get-Content -Raw $file.FullName
+            Write-Host "===== END SHADERLAB $($file.FullName) ====="
+          }
       - name: Print representative original haze programs
         shell: pwsh
         run: |
