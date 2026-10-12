@@ -39,10 +39,7 @@ public class OriginalTabzEnvironment : MonoBehaviour
         RenderSettings.ambientGroundColor = new Color(0.047f, 0.043f, 0.035f, 1f);
         RenderSettings.ambientIntensity = 1f;
 
-        RenderSettings.fog = true;
-        RenderSettings.fogMode = FogMode.Exponential;
-        RenderSettings.fogColor = OriginalFogAmbient;
-        RenderSettings.fogDensity = OriginalFogExtinction;
+        // The prototype uses MobileDistanceFog on the camera. Disable Unity's\n        // built-in fog here so the two effects do not stack or mask each other.\n        RenderSettings.fog = false;
 
         DynamicGI.UpdateEnvironment();
     }
