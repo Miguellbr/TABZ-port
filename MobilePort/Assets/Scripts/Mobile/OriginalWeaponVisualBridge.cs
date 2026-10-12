@@ -220,6 +220,14 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
         }
     }
 
+    public string GetDiagnosticStatus()
+    {
+        return "Rig físico: " + (weaponBody != null ? "Rigidbody OK" : "sem Rigidbody") +
+            " | ReloadAim: " + (reloadAim != null ? "OK" : "ausente") +
+            " | Movimento de recarga: " + (isReloadMoving ? "ativo" : "inativo") +
+            " | AK visual: " + (spawnedWeapon != null ? "carregada" : "não carregada");
+    }
+
     private void OnDestroy()
     {
         if (spawnedWeapon != null) Destroy(spawnedWeapon);
