@@ -176,20 +176,3 @@ public static class TabzHazeContextData
     private static float EvaluateSunsetCurve(float t) { return SunsetCurve.Evaluate(t); }
     private static float EvaluateNightCurve(float t) { return NightCurve.Evaluate(t); }
 }
-
-/// <summary>
-/// Optional marker for a recovered map zone. Assign a collider matching the
-/// original zone volume when that geometry is available. No bounds are
-/// fabricated for the current flat offline test scene.
-/// </summary>
-[RequireComponent(typeof(Collider))]
-public sealed class TabzHazeZone : MonoBehaviour
-{
-    public TabzHazeContextData.ZoneKind zone = TabzHazeContextData.ZoneKind.General;
-
-    public bool Contains(Vector3 worldPosition)
-    {
-        Collider zoneCollider = GetComponent<Collider>();
-        return zoneCollider != null && zoneCollider.bounds.Contains(worldPosition);
-    }
-}
