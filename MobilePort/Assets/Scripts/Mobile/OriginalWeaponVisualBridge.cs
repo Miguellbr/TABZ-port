@@ -111,11 +111,6 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
         if (weaponBody == null) weaponBody = spawnedWeapon.AddComponent<Rigidbody>();
         weaponBody.isKinematic = false;
         weaponBody.useGravity = false;
-        weaponBody.mass = 0.25f;
-        weaponBody.drag = 0f;
-        weaponBody.angularDrag = 0.05f;
-        weaponBody.interpolation = RigidbodyInterpolation.Interpolate;
-        weaponBody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
 
         // Keep the rigidbody in player space, not parented to the camera. Its
         // normal target is updated from the camera each physics tick.
