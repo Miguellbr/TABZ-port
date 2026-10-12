@@ -24,6 +24,14 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
     private GameObject inventoryPanel;
     private Text hotbarText;
     private int selectedSlot;
+    private Text fpsText;
+    private Text performanceStatus;
+    private GameObject performancePanel;
+    private bool showFps = true;
+    private bool fogEnabled = true;
+    private int fogProfile = 1;
+    private float fpsUpdateTimer;
+    private int fpsFrameCount;
 
     private void Start()
     {
@@ -57,6 +65,28 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
             ammoText.text = "MUNIÇÃO  " + weapon.Ammo + " / " + weapon.ReserveAmmo;
         if (hotbarText != null)
             hotbarText.text = "HOTBAR  [" + (selectedSlot + 1) + "] RIFLE DE TESTE";
+
+        if (showFps && fpsText != null)
+        {
+            fpsFrameCount++;
+            fpsUpdateTimer += Time.unscaledDeltaTime;
+            if (fpsUpdateTimer >= 0.5f)
+            {
+                float fps = fpsFrameCount / Mathf.Max(fpsUpdateTimer, 0.0001f);
+                fpsText.text = Mathf.RoundToInt(fps) + " FPS";
+                fpsFrameCount = 0;
+                fpsUpdateTimer = 0f;
+            }
+        }
+        else if (fpsText != null)
+        {
+            fpsText.text = "";
+        }
+
+        if (performanceStatus != null)
+            performanceStatus.text = "Névoa: " + (fogEnabled ? "Ligada" : "Desligada") +
+                "\\nIntensidade: " + GetFogProfileName() +
+                "\\nFPS: " + (showFps ? "Visível" : "Oculto");
     }
 
     private void BuildWorld()
@@ -86,7 +116,6 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         // A shorter near plane prevents the camera from slicing through it.
         camera.nearClipPlane = 0.05f;
         cameraObject.AddComponent<AudioListener>();
-        cameraObject.AddComponent<MobileFogDiagnostics>();
         player.viewCamera = camera;
 
         GameObject lightObject = new GameObject("Prototype Sun");
@@ -128,6 +157,12 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
             new Vector2(0.35f, 0.88f), new Vector2(0.65f, 0.98f), TextAnchor.MiddleCenter);
         ammoText = MakeText("Ammo", canvas.transform, "MUNIÇÃO  30 / 90", 22,
             new Vector2(0.78f, 0.84f), new Vector2(0.98f, 0.96f), TextAnchor.MiddleRight);
+        fpsText = MakeText("FPS Counter", canvas.transform, "60 FPS", 18,
+            new Vector2(0.02f, 0.91f), new Vector2(0.18f, 0.98f), TextAnchor.MiddleLeft);
+        MakeButton("DESEMPENHO", canvas.transform, new Vector2(0.80f, 0.70f),
+            new Vector2(0.98f, 0.79f), () => performancePanel.SetActive(!performancePanel.activeSelf));
+        performancePanel = BuildPerformancePanel(canvas.transform);
+        performancePanel.SetActive(false);
         hotbarText = MakeText("Hotbar Selection", canvas.transform, "HOTBAR  [1] RIFLE DE TESTE", 18,
             new Vector2(0.33f, 0.02f), new Vector2(0.67f, 0.10f), TextAnchor.MiddleCenter);
         inventoryPanel = BuildInventoryPanel(canvas.transform);
@@ -148,6 +183,54 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         originalWeapon.viewCamera = player.viewCamera;
         originalWeapon.resourcesPrefabPath = "items/Ak74";
         weapon.onFire = originalWeapon.PlayFireRecoil;
+    }
+
+    private GameObject BuildPerformancePanel(Transform parent)
+    {
+        GameObject panel = new GameObject("Mobile Performance Settings");
+        panel.transform.SetParent(parent, false);
+        RectTransform rect = panel.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.30f, 0.20f);
+        rect.anchorMax = new Vector2(0.70f, 0.80f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        Image background = panel.AddComponent<Image>();
+        background.color = new Color(0.035f, 0.045f, 0.04f, 0.96f);
+
+        MakeText("Performance Title", panel.transform, "DESEMPENHO", 25,
+            new Vector2(0.08f, 0.78f), new Vector2(0.92f, 0.96f), TextAnchor.MiddleCenter);
+        performanceStatus = MakeText("Performance Status", panel.transform, "", 18,
+            new Vector2(0.12f, 0.53f), new Vector2(0.88f, 0.77f), TextAnchor.MiddleCenter);
+
+        MakeButton("ATIVAR / DESATIVAR NÉVOA", panel.transform,
+            new Vector2(0.12f, 0.38f), new Vector2(0.88f, 0.51f),
+            () => { fogEnabled = !fogEnabled; ApplyFogSettings(); });
+        MakeButton("ALTERAR INTENSIDADE", panel.transform,
+            new Vector2(0.12f, 0.23f), new Vector2(0.88f, 0.36f),
+            () => { fogProfile = (fogProfile + 1) % 3; ApplyFogSettings(); });
+        MakeButton("FPS: MOSTRAR / OCULTAR", panel.transform,
+            new Vector2(0.12f, 0.08f), new Vector2(0.88f, 0.21f),
+            () => { showFps = !showFps; if (fpsText != null) fpsText.enabled = showFps; });
+        MakeButton("FECHAR", panel.transform,
+            new Vector2(0.68f, 0.01f), new Vector2(0.92f, 0.08f),
+            () => panel.SetActive(false));
+        return panel;
+    }
+
+    private string GetFogProfileName()
+    {
+        if (fogProfile == 0) return "Baixa";
+        if (fogProfile == 1) return "Original";
+        return "Alta";
+    }
+
+    private void ApplyFogSettings()
+    {
+        RenderSettings.fog = fogEnabled;
+        // Original preserves the recovered MyDay coefficient; Low/High are
+        // experimental multipliers for mobile performance testing.
+        float[] profileMultipliers = { 0.5f, 1f, 1.5f };
+        RenderSettings.fogDensity = 0.05f * profileMultipliers[fogProfile];
     }
 
     private GameObject BuildInventoryPanel(Transform parent)
