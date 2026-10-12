@@ -18,6 +18,7 @@ public class MobileDistanceFog : MonoBehaviour
     private TabzHazeContextData.ZoneKind activeZone = TabzHazeContextData.ZoneKind.General;
     private TabzHazeZone[] zones;
     private float nextContextRefresh;
+    private float lastAppliedTime = -1f;
 
     [Range(0f, 1f)]
     public float normalizedDayTime = 0.5f;
@@ -105,12 +106,12 @@ public class MobileDistanceFog : MonoBehaviour
         }
 
         if (!force && selectedZone == activeZone &&
-            Mathf.Approximately(activeSettings.extinction,
-                TabzHazeContextData.Evaluate(selectedZone, normalizedDayTime).extinction))
+            Mathf.Approximately(lastAppliedTime, normalizedDayTime))
             return;
 
         activeZone = selectedZone;
         activeSettings = TabzHazeContextData.Evaluate(activeZone, normalizedDayTime);
+        lastAppliedTime = normalizedDayTime;
         ApplySettings();
     }
 
