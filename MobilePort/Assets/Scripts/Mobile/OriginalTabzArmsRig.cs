@@ -378,10 +378,13 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
             {
                 if (!hasGrabbedRight)
                 {
+                    Collider handCollider = rightHandBody.GetComponentInChildren<Collider>();
+                    if (handCollider != null) handCollider.enabled = false;
                     PullHandToTag(rightHandBody, rightWeaponTag);
                     if (Vector3.Distance(rightWeaponTag.position,
                         rightHandBody.transform.GetChild(1).position) < 0.1f)
                     {
+                        if (handCollider != null) handCollider.enabled = true;
                         AlignHandToTag(rightHandBody.transform, rightWeaponTag);
                         rightWeaponJoint = CreateWeaponJoint(rightHandBody, weaponBody);
                         hasGrabbedRight = true;
@@ -390,10 +393,13 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
 
                 if (hasGrabbedRight && leftWeaponJoint == null)
                 {
+                    Collider handCollider = leftHandBody.GetComponentInChildren<Collider>();
+                    if (handCollider != null) handCollider.enabled = false;
                     PullHandToTag(leftHandBody, leftWeaponTag);
                     if (Vector3.Distance(leftWeaponTag.position,
                         leftHandBody.transform.GetChild(1).position) < 0.1f)
                     {
+                        if (handCollider != null) handCollider.enabled = true;
                         AlignHandToTag(leftHandBody.transform, leftWeaponTag);
                         leftWeaponJoint = CreateWeaponJoint(leftHandBody, weaponBody);
                     }
