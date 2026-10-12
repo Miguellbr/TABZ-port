@@ -126,3 +126,48 @@ jobs:
             exported-shaders/
             raw-dxbc/
           retention-days: 14
+
+  decompile:
+    needs: inspect
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tabz-original-shader-report
+          path: artifact
+      - name: Download DXBC to HLSL decompiler
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "fxcd.zip"
+          $dir = Join-Path $env:RUNNER_TEMP "fxcd"
+          Invoke-WebRequest -Uri "https://github.com/hellokenlee/fxcd/releases/download/v0.2.1/fxcd-v0.2.1.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          $exe = Get-ChildItem -Path $dir -Filter "fxcd.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { throw "fxcd.exe was not found in the release archive" }
+          "FXCD_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Decompile original DeepSky DXBC programs
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path "artifact/raw-dxbc" -Filter "*.bin" -Recurse
+          if (-not $files) { throw "No extracted DXBC programs were found" }
+          $success = 0
+          $failed = 0
+          foreach ($file in $files) {
+            & $env:FXCD_PATH -D $file.FullName
+            $hlsl = [System.IO.Path]::ChangeExtension($file.FullName, ".hlsl")
+            if (Test-Path $hlsl) {
+              $success++
+              Write-Host "DECOMPILED $($file.FullName) -> $hlsl"
+            } else {
+              $failed++
+              Write-Host "NO_OUTPUT $($file.FullName)"
+            }
+          }
+          "Decompiled: $success; without output: $failed"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tabz-decompiled-haze-hlsl
+          path: artifact/raw-dxbc/
+          retention-days: 14
