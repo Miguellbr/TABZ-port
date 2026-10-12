@@ -49,14 +49,29 @@ jobs:
                               continue
                           try:
                               data = obj.read()
-                              if len(report["shaders"]) < 4:
-                                  print("SHADER_DEBUG_TYPE", type(data))
-                                  print("SHADER_DEBUG_REPR", repr(data)[:3000])
-                                  print("SHADER_DEBUG_DIR", [x for x in dir(data) if not x.startswith("__")][:100])
+                              if len(report["shaders"]) < 3:
+                                  print("SHADER_PATH", getattr(data, "m_PathName", None))
+                                  print("SHADER_SCRIPT", repr(getattr(data, "m_Script", None))[:2000])
+                                  print("SHADER_GUID", repr(getattr(data, "m_AssetGUID", None)))
+                                  parsed = getattr(data, "m_ParsedForm", None)
+                                  print("PARSED_TYPE", type(parsed))
+                                  print("PARSED_REPR", repr(parsed)[:12000])
                                   try:
-                                      print("SHADER_DEBUG_VARS", repr(vars(data))[:5000])
+                                      print("PARSED_DIR", [x for x in dir(parsed) if not x.startswith("__")][:100])
+                                      print("PARSED_VARS", repr(vars(parsed))[:12000])
                                   except Exception as debug_exc:
-                                      print("SHADER_DEBUG_VARS_ERROR", repr(debug_exc))
+                                      print("PARSED_DEBUG_ERROR", repr(debug_exc))
+                                  print("PLATFORMS", repr(getattr(data, "platforms", None))[:2000])
+                                  print("OFFSETS", repr(getattr(data, "offsets", None))[:2000])
+                                  print("COMPRESSED_LENGTHS", repr(getattr(data, "compressedLengths", None))[:2000])
+                                  print("DECOMPRESSED_LENGTHS", repr(getattr(data, "decompressedLengths", None))[:2000])
+                                  print("DECOMPRESSED_SIZE", repr(getattr(data, "decompressedSize", None)))
+                                  try:
+                                      exported = data.export()
+                                      print("SHADER_EXPORT_TYPE", type(exported))
+                                      print("SHADER_EXPORT", repr(exported)[:12000])
+                                  except Exception as export_exc:
+                                      print("SHADER_EXPORT_ERROR", repr(export_exc))
                                   try:
                                       raw = obj.get_raw_data()
                                       print("SHADER_RAW", len(raw), raw[:64].hex())
