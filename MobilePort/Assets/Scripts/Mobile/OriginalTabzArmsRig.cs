@@ -32,6 +32,7 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
     private bool hasGrabbedRight;
     private float grabStartedAt;
     private Mesh armMesh;
+    private PhysicMaterial originalHandPhysicsMaterial;
     private string visualStatus = "não inicializado";
 
     public void Initialize(Camera camera, Rigidbody weaponBody, Transform weaponRoot)
@@ -43,6 +44,14 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
             return;
         }
 
+        originalHandPhysicsMaterial = new PhysicMaterial("TABZ SuperSlippery")
+        {
+            dynamicFriction = 0.1f,
+            staticFriction = 0.1f,
+            bounciness = 0f,
+            frictionCombine = PhysicMaterialCombine.Minimum,
+            bounceCombine = PhysicMaterialCombine.Average
+        };
         CreateCameraTargets(camera.transform);
         weaponRoot.position = RifleAim.position;
         weaponRoot.rotation = RifleAim.rotation;
@@ -104,6 +113,9 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
             new Vector3(-0.30991465f, 0.047909737f, 4.4283676f),
             new Quaternion(0.6997459f, -0.016339839f, 0.009785423f, 0.714138f), Vector3.one);
         Rigidbody armLeftBody = AddBody(armLeft, 2f, 0f, 0.05f, true);
+        AddOriginalCapsuleCollider(armLeft, new Vector3(-0.67f, 0f, -0.02f),
+            new Quaternion(-0.49692684f, -0.49270704f, -0.50278634f, 0.50745386f),
+            new Vector3(0.3335617f, 0.5206316f, 0.33356217f));
         ConfigureCharacterJoint(armLeft.gameObject.AddComponent<CharacterJoint>(), torsoBody,
             Vector3.forward, Vector3.up, new Vector3(-0.7205907f, -0.30991465f, -0.04283583f),
             1000f, -90f, 60f, 140f, 140f);
@@ -116,11 +128,17 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
             Vector3.forward, Vector3.up, new Vector3(-1.1500763f, 0.000011026859f, 0.000113509595f),
             1000f, -90f, 0f, 0f, 0f);
         CreateHandMarkers(handLeft, true);
+        AddOriginalCapsuleCollider(handLeft, new Vector3(-0.61f, 0.01f, 0f),
+            new Quaternion(-0.00000044703478f, -0.00000046647614f, -0.7071066f, 0.70710707f),
+            new Vector3(0.33354914f, 0.6322769f, 0.3335496f));
 
         Transform armRight = CreateChild(armature, "Arm_Right",
             new Vector3(0.30485964f, 0.04791546f, 4.455677f),
             new Quaternion(-0.025241703f, 0.6994643f, -0.713981f, -0.01853894f), Vector3.one);
         Rigidbody armRightBody = AddBody(armRight, 2f, 0f, 0.05f, true);
+        AddOriginalCapsuleCollider(armRight, new Vector3(-0.68f, 0.01f, -0.02f),
+            new Quaternion(0.50313956f, -0.48632774f, 0.5089855f, 0.5012682f),
+            new Vector3(0.3335617f, 0.5206307f, 0.3335618f));
         ConfigureCharacterJoint(armRight.gameObject.AddComponent<CharacterJoint>(), torsoBody,
             Vector3.forward, Vector3.down, new Vector3(-0.74789876f, 0.30485964f, -0.04256618f),
             1000f, -90f, 60f, 140f, 140f);
@@ -133,6 +151,9 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
             Vector3.back, Vector3.up, new Vector3(-1.0850682f, 0.0000035837293f, 0.00013267994f),
             1000f, -90f, 0f, 0f, 0f);
         CreateHandMarkers(handRight, false);
+        AddOriginalCapsuleCollider(handRight, new Vector3(-0.61f, -0.01f, 0f),
+            new Quaternion(-0.00000011920929f, -0.00000013876706f, 0.70710623f, 0.70710737f),
+            new Vector3(0.3335617f, 0.6322746f, 0.33356202f));
 
         rightIdle = CreateChild(torso, "RightIdle",
             new Vector3(0.63f, 0.69f, 0.21f),
@@ -240,6 +261,18 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
         renderer.localBounds = sourceMesh.bounds;
         visualStatus = "mesh original: " + (armTriangles.Count / 3) +
                        " triângulos de braço / " + (sourceTriangles.Length / 3) + " totais";
+    }
+
+    private void AddOriginalCapsuleCollider(Transform body, Vector3 position,
+        Quaternion rotation, Vector3 scale)
+    {
+        Transform colliderTransform = CreateChild(body, "collider", position, rotation, scale);
+        CapsuleCollider capsule = colliderTransform.gameObject.AddComponent<CapsuleCollider>();
+        capsule.radius = 0.5f;
+        capsule.height = 2f;
+        capsule.direction = 1;
+        capsule.center = Vector3.zero;
+        capsule.sharedMaterial = originalHandPhysicsMaterial;
     }
 
     private static float ArmWeight(BoneWeight weight)
@@ -478,5 +511,6 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
         if (ReloadAim != null) Destroy(ReloadAim.gameObject);
         if (RifleAim != null) Destroy(RifleAim.gameObject);
         if (armMesh != null) Destroy(armMesh);
+        if (originalHandPhysicsMaterial != null) Destroy(originalHandPhysicsMaterial);
     }
 }
