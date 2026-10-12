@@ -2,7 +2,7 @@
 
 Source inspected: original TABZ Modded v5.1 build, `GAME_Data/resources.assets`, plus its original `Assembly-CSharp.dll`. The shader assets are also present in the v4 build; the inspected asset files were previously confirmed identical between the two builds.
 
-This is a reverse-engineering report, not a port implementation. No fog code in `MobilePort` was changed by this investigation.
+This is the reverse-engineering reference for the mobile implementation. The current implementation status and its explicit limitations are documented in [`MobilePort/MOBILE-HAZE-IMPLEMENTATION.md`](../MobilePort/MOBILE-HAZE-IMPLEMENTATION.md).
 
 ## 1. Shader assets
 
@@ -117,7 +117,7 @@ The original `DS_HazeView` defaults include:
 - haze, fog extinction and fog lighting applied to the skybox;
 - air/Rayleigh skybox application disabled.
 
-Those are the original PC effect defaults, not recommended Android defaults. For the low-end Android baseline, temporal history, directional shafts and local volumetric lights are candidates to omit or make optional. The base fog still needs depth-aware distance integration and the original context/light-colour behavior; replacing it with a uniform grey overlay is not equivalent.
+Those are the original PC effect defaults, not recommended Android defaults. For the low-end Android baseline, temporal history, directional shafts and local volumetric lights are candidates to omit or make optional. The first mobile pass now uses the recovered context data and a depth-aware geometry-extinction approximation. It does not yet reproduce skybox integration, the full scattering/radiance path, or temporal reconstruction; see the mobile implementation status document.
 
 ## 7. Original platform requirements\n\nThe original `DS_HazeView.CheckHasSystemSupport` disables the effect when image effects or render textures are unavailable, when shader model 3.0 is unavailable, or when `RFloat` render textures are unsupported. HDR cameras additionally require `ARGBHalf`. Forward rendering with MSAA is rejected because the effect uses floating-point render targets. This is another reason not to assume the original PC component can simply be enabled unchanged on every Android device.\n\n## 8. Named constant-buffer and texture mapping
 
@@ -294,4 +294,4 @@ The main menu has its own `DS_HazeZone` with priority 0 and blend range 0.1. Its
 - The values above are from the serialized `DS_HazeZone` MonoBehaviours in `TABZ_World.unity`, not class constructor defaults.
 - The zone priority and blend range are serialized on the zone component. The actual blend weight also depends on the camera's position inside that zone; priority and spatial blending are handled by `DS_HazeCore`/`DS_HazeZone`.
 - The time-curve weights are not labels for fixed hours. They are evaluated against the normalized day-cycle time supplied by the game's day/night system.
-- The original mobile implementation is still untouched. These values are now available for a faithful context-data port, but the original multi-pass PC shader still needs a mobile-compatible implementation.
+- The recovered values are now wired into the first mobile context-data implementation. The original multi-pass PC shader still requires a separate mobile-compatible implementation; the current low-cost geometry pass is explicitly an approximation.
