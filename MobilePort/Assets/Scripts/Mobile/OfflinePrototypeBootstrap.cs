@@ -86,6 +86,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         // A shorter near plane prevents the camera from slicing through it.
         camera.nearClipPlane = 0.05f;
         cameraObject.AddComponent<AudioListener>();
+        cameraObject.AddComponent<MobileFogDiagnostics>();
         player.viewCamera = camera;
 
         GameObject lightObject = new GameObject("Prototype Sun");
