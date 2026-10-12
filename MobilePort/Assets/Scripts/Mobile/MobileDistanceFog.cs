@@ -24,6 +24,7 @@ public class MobileDistanceFog : MonoBehaviour
     public float normalizedDayTime = 0.5f;
 
     public bool fogEnabled = true;
+    [Range(0f, 2f)] public float intensityMultiplier = 1f;
 
     private void Awake()
     {
@@ -66,6 +67,12 @@ public class MobileDistanceFog : MonoBehaviour
     public void SetFog(bool value)
     {
         fogEnabled = value;
+        ApplySettings();
+    }
+
+    public void SetIntensity(float value)
+    {
+        intensityMultiplier = Mathf.Clamp(value, 0f, 2f);
         ApplySettings();
     }
 
@@ -120,7 +127,7 @@ public class MobileDistanceFog : MonoBehaviour
         if (fogMaterial == null) return;
 
         fogMaterial.SetColor("_FogColor", activeSettings.ambient);
-        fogMaterial.SetFloat("_FogExtinction", activeSettings.extinction);
+        fogMaterial.SetFloat("_FogExtinction", activeSettings.extinction * intensityMultiplier);
         fogMaterial.SetFloat("_FogHeightFalloff", activeSettings.heightFalloff);
         fogMaterial.SetFloat("_FogOpacity", activeSettings.opacity);
         // The original fogoff command changes the start distance to 5; it
@@ -144,7 +151,8 @@ public class MobileDistanceFog : MonoBehaviour
         return "Modo: " + (depthDebugEnabled ? "VISUALIZANDO DEPTH" : "névoa") +
             " | Zona: " + activeZone +
             " | Hora normalizada: " + normalizedDayTime.ToString("0.000") +
-            " | Extinção: " + activeSettings.extinction.ToString("0.0000") +
+            " | Intensidade: " + (intensityMultiplier * 100f).ToString("0") + "%"
+            + " | Extinção: " + (activeSettings.extinction * intensityMultiplier).ToString("0.0000") +
             " | Densidade vertical: " + activeSettings.heightFalloff.ToString("0.0000") +
             " | Câmera: " + (targetCamera != null ? "OK" : "ausente") +
             " | Shader: " + shaderStatus +
