@@ -192,6 +192,106 @@ For comparison, `Hidden/Post FX/Fog` uses `$Globals` b0 with `_FogColor` at byte
 
 **Mapped:** original C# context fields to named Unity shader globals; DX11 vertex/pixel pairing; all six main shader pass responsibilities; the core composite's named constant-buffer slots and byte offsets; its temporal/non-temporal texture inputs; and the key supporting-pass and local-volumetric bindings.
 
-**Remaining:** the exact serialized context values for every scene zone/time variant still need to be consolidated against the scene data before choosing Android defaults. The shader contract itself is now mapped; the mobile implementation has not yet been changed.
+**Completed in section 10:** serialized values for the main-menu context and all five gameplay haze zones, including time curves, priorities, blend ranges and fog colours. The mobile implementation has not yet been changed.
 
 No values in the existing experimental `MobileDistanceFog` implementation were adjusted as part of this mapping.
+
+## 10. Exact serialized values from the original v5.1 scene
+
+These values were read directly from the AssetRipper-exported `TABZ_World.unity` YAML, not estimated from screenshots. The scene contains five `DS_HazeZone` components. Their GameObject names, priorities and blend ranges are:
+
+| Zone GameObject | Priority | Blend range | Context items |
+|---|---:|---:|---|
+| `DS_HazeZone` (general map zone) | 0 | 0.1 | MyDay, MyDay_Copy, MyDay_Copy_Copy, Night |
+| `Snow2` | 100 | 0.531 | MyDay, MyDay_Copy, MyDay_Copy_Copy, Night |
+| `LightHouse` | 250 | 0.1 | MyDay, MyDay_Copy, MyDay_Copy_Copy, Night |
+| `Snow` | 250 | 0.531 | MyDay, MyDay_Copy, MyDay_Copy_Copy, Night |
+| `darknes` | 250 | 0.05 | MyDay only |
+
+### Shared values in all gameplay zones
+
+The following values are identical in every serialized gameplay context item:
+
+| Field | Serialized value | Multiplier enum | Effective multiplier |
+|---|---:|---:|---:|
+| Air scattering scale | 1 | 3 = One | 1× |
+| Air density height falloff | 0.001 | — | 0.001 |
+| Haze scattering scale | 1 | 3 = One | 1× |
+| Haze density height falloff | 0.003 | — | 0.003 |
+| Haze scattering direction | 0.4 | — | 0.4 |
+| Haze secondary scattering ratio | 0.8 | — | 0.8 |
+| Fog opacity | 1 | — | 1 |
+| Fog scattering scale | 0 | — | 0 |
+| Fog start distance | 0 | — | 0 |
+| Fog scattering direction | 0.7 | — | 0.7 |
+| Fog light colour | `(1, 0.6653145, 0.44852942, 1)` | — | unchanged |
+
+The multiplier enum is defined in `DS_HazeContextItem.cs`: `0=OneTenth`, `1=OneFifth`, `2=OneHalf`, `3=One`, `4=Two`, `5=Five`, `6=Ten`. Therefore the serialized multiplier value `3` is exactly 1×, not 3×.
+
+### Zone-specific fog values
+
+All values below are raw serialized values. The extinction value is still converted by the original controller using the shader's `* 0.01` scale. Thus 3 becomes 0.03, 5 becomes 0.05, 4.75 becomes 0.0475, and 8 becomes 0.08 in `_DS_BetaParams.w`.
+
+| Zone | Context item | Fog extinction scale | Shader extinction component | Fog density height falloff | Fog ambient colour (RGBA) |
+|---|---|---:|---:|---:|---|
+| General `DS_HazeZone` | MyDay | 5 | 0.05 | 0.015 | (0.6911765, 0.93610543, 1, 1) |
+| General `DS_HazeZone` | MyDay_Copy | 5 | 0.05 | 0.015 | (1, 0.7380324, 0.53676474, 1) |
+| General `DS_HazeZone` | MyDay_Copy_Copy | 5 | 0.05 | 0.015 | (1, 0.42647058, 0.50953335, 1) |
+| General `DS_HazeZone` | Night | 4.75 | 0.0475 | 0.0001 | (0.25, 0.25, 0.25, 1) |
+| `Snow2` | MyDay | 3 | 0.03 | 0.0001 | (0.875, 0.9741379, 1, 1) |
+| `Snow2` | MyDay_Copy | 3 | 0.03 | 0.0001 | (1, 0.92099386, 0.8602941, 1) |
+| `Snow2` | MyDay_Copy_Copy | 3 | 0.03 | 0.0001 | (1, 0.78676474, 0.81764704, 1) |
+| `Snow2` | Night | 4.75 | 0.0475 | 0.0001 | (0.4705882, 0.4705882, 0.4705882, 1) |
+| `LightHouse` | MyDay | 5 | 0.05 | 0.0001 | (0.6911765, 0.93610543, 1, 1) |
+| `LightHouse` | MyDay_Copy | 5 | 0.05 | 0.0001 | (1, 0.7380324, 0.53676474, 1) |
+| `LightHouse` | MyDay_Copy_Copy | 5 | 0.05 | 0.0001 | (1, 0.42647058, 0.50953335, 1) |
+| `LightHouse` | Night | 4.75 | 0.0475 | 0.0001 | (0.25, 0.25, 0.25, 1) |
+| `Snow` | MyDay | 5 | 0.05 | 0.0001 | (0.875, 0.9741379, 1, 1) |
+| `Snow` | MyDay_Copy | 5 | 0.05 | 0.0001 | (1, 0.92099386, 0.8602941, 1) |
+| `Snow` | MyDay_Copy_Copy | 5 | 0.05 | 0.0001 | (1, 0.78676474, 0.81764704, 1) |
+| `Snow` | Night | 4.75 | 0.0475 | 0.0001 | (0.4705882, 0.4705882, 0.4705882, 1) |
+| `darknes` | MyDay | 8 | 0.08 | 0.0001 | (1, 0.11764705, 0.11764705, 1) |
+
+Every gameplay context item has `m_FogOpacity=1`, `m_FogScatteringScale=0`, `m_FogStartDistance=0`, and `m_FogScatteringDirection=0.7`. The fog-light colour is the shared warm value shown above. The general map zone's daytime height falloff (`0.015`) is much higher than the special zones' (`0.0001`); this is an original scene distinction and must not be flattened to one guessed value.
+
+### Time curves and exact keyframes
+
+All four-context gameplay zones serialize the same curves. `DS_HazeContext.GetContextItemBlended` copies the first item as the baseline and then lerps each later item using that item's `AnimationCurve.Evaluate(time)`. Consequently, `MyDay` is the base item; its own curve is serialized but is not evaluated by that blending loop.
+
+| Context item | Keyframe time | Weight | In/out tangent |
+|---|---:|---:|---:|
+| MyDay (base) | 0.15 | 0 | 0 |
+| MyDay (base) | 0.5 | 1 | 0 |
+| MyDay (base) | 0.85 | 0 | 0 |
+| MyDay_Copy | 0 | 0 | 14.749998 |
+| MyDay_Copy | 0.15 | 1 | 0 |
+| MyDay_Copy | 0.35 | 0 | -0.024193546 |
+| MyDay_Copy | 1 | 0 | 0.016614795 |
+| MyDay_Copy_Copy | 0 | 0.012499999 | 0 |
+| MyDay_Copy_Copy | 0.65000004 | 0 | -0.02970297 |
+| MyDay_Copy_Copy | 0.8666687 | 0.97500074 | 0 |
+| MyDay_Copy_Copy | 1 | 0 | -8.399995 |
+| Night | 0 | 1 | 0.02848094 |
+| Night | 0.1 | 0 | 0 |
+| Night | 0.90000004 | 0.0000011436641 | -0.0000035189667 |
+| Night | 1 | 1 | 0 |
+
+The `darknes` zone contains only `MyDay`, so it has no serialized Night or transition context item of its own.
+
+### Main-menu context (separate from gameplay)
+
+The main menu has its own `DS_HazeZone` with priority 0 and blend range 0.1. Its only item is named `Morning` (the original YAML stores this name as UTF-8 hex `4d6f726e696e67`). Its values are:
+
+- Air scattering scale 1, multiplier One; air height falloff 0.001.
+- Haze scattering scale 1, multiplier One; haze height falloff 0.003; haze direction 0.4; secondary ratio 0.8.
+- Fog opacity 1; fog scattering scale 2; fog extinction scale 8, multiplier One; fog height falloff 0.0001; start distance 0; scattering direction 0.7.
+- Ambient colour `(0.36764705, 0.36764705, 0.36764705, 1)`.
+- Fog-light colour `(1, 0.6653145, 0.44852942, 1)`.
+- Its weight curve keyframes are (0.25, 0), (0.5, 1), (0.75, 0).
+
+### Source and interpretation notes
+
+- The values above are from the serialized `DS_HazeZone` MonoBehaviours in `TABZ_World.unity`, not class constructor defaults.
+- The zone priority and blend range are serialized on the zone component. The actual blend weight also depends on the camera's position inside that zone; priority and spatial blending are handled by `DS_HazeCore`/`DS_HazeZone`.
+- The time-curve weights are not labels for fixed hours. They are evaluated against the normalized day-cycle time supplied by the game's day/night system.
+- The original mobile implementation is still untouched. These values are now available for a faithful context-data port, but the original multi-pass PC shader still needs a mobile-compatible implementation.
