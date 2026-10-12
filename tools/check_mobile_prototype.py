@@ -102,12 +102,6 @@ for filename in offline_files:
         if forbidden in source:
             errors.append(f"{filename}: offline scaffold unexpectedly depends on {forbidden}")
 
-if errors:
-    print("\n".join("ERROR: " + e for e in errors))
-    sys.exit(1)
-print(f"PASS: validated {len(FILES)} C# files, brace balance, input/UI contracts and offline dependency boundary.")
-
-
 
 # The mobile haze must use recovered TABZ context values rather than the old guessed
 # start/end-distance presets or a full-screen sky tint.
@@ -161,3 +155,8 @@ else:
     for token in ("workflow_dispatch:", "game-ci/unity-builder@v4", "TABZMobileBuild.BuildAndroid", "UNITY_LICENSE"):
         if token not in workflow_source:
             errors.append(f"android-prototype-build.yml: missing expected token {token!r}")
+
+if errors:
+    print("\n".join("ERROR: " + e for e in errors))
+    sys.exit(1)
+print(f"PASS: validated {len(FILES)} C# files, haze shader contracts, brace balance, input/UI contracts and offline dependency boundary.")
