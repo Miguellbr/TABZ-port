@@ -239,6 +239,10 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
             ? distanceFog.GetDiagnosticStatus()
             : "Componente MobileDistanceFog não encontrado";
         diagnostic += "\\nNévoa: " + (fogEnabled ? "Ligada" : "Desligada");
+        OriginalWeaponVisualBridge weaponBridge = player != null
+            ? player.GetComponent<OriginalWeaponVisualBridge>() : null;
+        diagnostic += "\\nArma: " + (weaponBridge != null
+            ? weaponBridge.GetDiagnosticStatus() : "bridge ausente");
         diagnostic += "\\nDispositivo: " + SystemInfo.deviceModel;
         GUIUtility.systemCopyBuffer = diagnostic;
         if (fogDiagnosticText != null)
