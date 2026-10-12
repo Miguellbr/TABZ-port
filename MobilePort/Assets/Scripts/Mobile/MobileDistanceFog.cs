@@ -15,6 +15,7 @@ public class MobileDistanceFog : MonoBehaviour
     private bool shaderFound;
     private string initializationError;
     private int renderImageCalls;
+    private bool depthDebugEnabled;
 
     [Range(0, 2)] public int profile = 1;
     public bool fogEnabled = true;
@@ -60,6 +61,13 @@ public class MobileDistanceFog : MonoBehaviour
         ApplyProfile();
     }
 
+    public void ToggleDepthDebug()
+    {
+        depthDebugEnabled = !depthDebugEnabled;
+        if (fogMaterial != null)
+            fogMaterial.SetFloat("_DebugDepth", depthDebugEnabled ? 1f : 0f);
+    }
+
     private void ApplyProfile()
     {
         if (fogMaterial == null) return;
@@ -77,7 +85,8 @@ public class MobileDistanceFog : MonoBehaviour
             (fogMaterial != null && fogMaterial.shader.isSupported ? "OK" : "erro");
         string renderStatus = renderImageCalls > 0 ? renderImageCalls.ToString() + " chamadas" : "NÃO chamado";
         string errorStatus = string.IsNullOrEmpty(initializationError) ? "nenhum" : initializationError;
-        return "Câmera: " + (targetCamera != null ? "OK" : "ausente") +
+        return "Modo: " + (depthDebugEnabled ? "VISUALIZANDO DEPTH" : "névoa") +
+            " | Câmera: " + (targetCamera != null ? "OK" : "ausente") +
             " | Shader: " + shaderStatus +
             " | Depth: " + (depthRequested ? "solicitado" : "não") +
             " | Render: " + renderStatus +
