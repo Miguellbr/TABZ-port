@@ -13,6 +13,9 @@ FILES = {
     "OfflinePrototypeWeapon.cs": ["class OfflinePrototypeWeapon", "void Fire()", "void Reload()", "Physics.Raycast"],
     "OfflinePrototypeZombie.cs": ["class OfflinePrototypeZombie", "TakeDamage", "IsDead"],
     "OriginalWeaponVisualBridge.cs": ["class OriginalWeaponVisualBridge", "Resources.Load<GameObject>", "viewCamera.transform"],
+    "MobileDistanceFog.cs": ["class MobileDistanceFog", "TabzHazeContextData.Evaluate", '"_FogExtinction"', "SetFog(bool value)"],
+    "TabzHazeContextData.cs": ["class TabzHazeContextData", "0.015f", "0.0001f", "0.6653145f", "EvaluateNightCurve"],
+    "TabzHazeZone.cs": ["class TabzHazeZone", "Collider.ClosestPoint", "GetComponent<Collider>"],
 }
 
 def strip_csharp_literals_and_comments(source):
@@ -104,6 +107,21 @@ if errors:
     sys.exit(1)
 print(f"PASS: validated {len(FILES)} C# files, brace balance, input/UI contracts and offline dependency boundary.")
 
+
+
+# The mobile haze must use recovered TABZ context values rather than the old guessed
+# start/end-distance presets or a full-screen sky tint.
+haze_shader = ROOT / "MobilePort" / "Assets" / "Resources" / "MobileDistanceFog.shader"
+if not haze_shader.is_file():
+    errors.append("Missing mobile haze shader")
+else:
+    shader_source = haze_shader.read_text(encoding="utf-8")
+    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)"):
+        if token not in shader_source:
+            errors.append(f"MobileDistanceFog.shader: missing expected token {token!r}")
+    for forbidden in ("_FogEnd", "_SkyFogStrength"):
+        if forbidden in shader_source:
+            errors.append(f"MobileDistanceFog.shader: obsolete guessed control {forbidden!r} remains")
 
 # The manual Android build must validate the imported prefab before compiling.
 build_script = ROOT / "MobilePort" / "Assets" / "Editor" / "TABZMobileBuild.cs"
