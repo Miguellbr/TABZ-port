@@ -131,8 +131,11 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
     {
         GameObject aim = new GameObject("Recovered TABZ ReloadAimTag");
         reloadAim = aim.transform;
-        reloadAim.SetParent(viewCamera.transform, false);
-        reloadAim.localPosition = reloadAimLocalPosition;
+        // Original hierarchy: PlayerRoot/CameraHolder(y=2.1135998)/CameraRot(180° Y)/CameraForce/Aims/RELOAD.
+        // reloadAimLocalPosition already includes CameraRot's 180° yaw; add the recovered holder height.
+        reloadAim.SetParent(transform, false);
+        reloadAim.localPosition = new Vector3(reloadAimLocalPosition.x,
+            2.1135998f + reloadAimLocalPosition.y, reloadAimLocalPosition.z);
         reloadAim.localRotation = new Quaternion(
             reloadAimLocalRotation.x, reloadAimLocalRotation.y,
             reloadAimLocalRotation.z, reloadAimLocalRotation.w);
