@@ -1,0 +1,43 @@
+name: Inspect decompiled DeepSky Haze
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-decompiled-haze.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download decompiled shader artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh run download 38301772658 --repo Miguellbr/TABZ-port --name tabz-decompiled-haze-hlsl --dir decompiled
+      - name: Print representative original haze programs
+        shell: pwsh
+        run: |
+          $targets = @(
+            "version-2/Hidden_DS_Haze/platform-4/program-1-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_DS_Haze/platform-4/program-36-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_DS_HazeLightVolume/platform-4/program-32-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_Post_FX_Fog/platform-4/program-1-kShaderGpuProgramDX11PixelSM40.hlsl"
+          )
+          foreach ($relative in $targets) {
+            $path = Join-Path "decompiled" $relative
+            if (Test-Path $path) {
+              Write-Host "===== BEGIN $relative ====="
+              Get-Content -Raw $path
+              Write-Host "===== END $relative ====="
+            } else {
+              Write-Host "MISSING $relative"
+              Get-ChildItem -Path "decompiled" -Recurse -Filter "*.hlsl" | Select-Object -First 20 -ExpandProperty FullName
+            }
+          }
