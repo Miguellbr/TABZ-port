@@ -225,12 +225,18 @@ jobs:
               for sub in shader["subshaders"]:
                   for p in sub["passes"]:
                       print(f"PASS {p['pass_index']}: {p['name']}")
+                      print("  name_indices raw:", json.dumps(p["name_indices"], default=str)[:3000])
                       for stage_name in ("vertex", "fragment"):
                           stage = p[stage_name]
                           if not stage:
                               continue
                           variants = stage["variants"]
                           print(f"  {stage_name}: {len(variants)} serialized variants")
+                          raw_stage = vertex if stage_name == "vertex" else fragment
+                          raw_common = getattr(raw_stage, "m_CommonParameters", None) if raw_stage is not None else None
+                          print("  stage object type/keys:", type(raw_stage).__name__, list(vars(raw_stage).keys())[:80] if hasattr(raw_stage, "__dict__") else [])
+                          print("  common object type/keys:", type(raw_common).__name__ if raw_common is not None else None, list(vars(raw_common).keys())[:80] if raw_common is not None and hasattr(raw_common, "__dict__") else [])
+                          print("  common raw:", json.dumps(plain(raw_common), default=str)[:4000])
                           for v in variants:
                               print("   ", json.dumps({k:v.get(k) for k in ("subprogram_index","m_BlobIndex","m_GpuProgramType","m_ShaderHardwareTier","m_Keywords","m_ShaderRequirements") if k in v}, default=str))
                           if stage["common_parameters"]:
