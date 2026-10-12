@@ -86,7 +86,7 @@ jobs:
                                           dxbc_offset = code.find(b"DXBC")
                                           program_type = getattr(subprogram.m_ProgramType, "name", str(subprogram.m_ProgramType))
                                           output = dxbc_dir / f"program-{sub_index}-{program_type}.bin"
-                                          output.write_bytes(code)
+                                          output.write_bytes(code[dxbc_offset:] if dxbc_offset >= 0 else code)
                                           dxbc_count += 1
                                           print("DXBC_EXTRACT", root.name, name, sub_index, program_type, len(code), "dxbc_offset", dxbc_offset, "prefix", code[:32].hex(), ",".join(subprogram.m_Keywords))
                               report["shaders"].append({
