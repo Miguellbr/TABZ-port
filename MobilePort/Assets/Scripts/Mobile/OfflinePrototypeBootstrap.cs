@@ -85,8 +85,8 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
 
         if (performanceStatus != null)
             performanceStatus.text = "Névoa: " + (fogEnabled ? "Ligada" : "Desligada") +
-                "\\nIntensidade: " + GetFogProfileName() +
-                "\\nFPS: " + (showFps ? "Visível" : "Oculto");
+                "\nIntensidade: " + GetFogProfileName() +
+                "\nFPS: " + (showFps ? "Visível" : "Oculto");
     }
 
     private void BuildWorld()
