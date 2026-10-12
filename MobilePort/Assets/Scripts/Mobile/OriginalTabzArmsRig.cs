@@ -162,10 +162,10 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
             new Vector3(0.63f, -0.69f, 0.21f),
             new Quaternion(-0.27388707f, -0.2738925f, -0.6519072f, -0.65190935f), Vector3.one);
 
-        // The original hip was joined to the player's main Rigidbody. The
-        // offline controller uses CharacterController, so a kinematic anchor
-        // replaces only that outermost connection; the original ragdoll joints
-        // from torso through both hands remain CharacterJoints.
+        // The original hip is its own 30 kg Rigidbody. The offline controller
+        // moves a CharacterController instead of a physics body, so this
+        // kinematic anchor keeps the hip rig attached to the moving player.
+        // The recovered torso/upper-arm/hand CharacterJoints remain unchanged.
         GameObject anchorObject = new GameObject("Original TABZ Player Rig Anchor");
         anchorTransform = anchorObject.transform;
         anchorTransform.SetParent(transform, false);
