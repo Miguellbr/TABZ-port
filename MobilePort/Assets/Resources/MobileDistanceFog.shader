@@ -19,12 +19,25 @@ Shader "Hidden/TABZ/MobileDistanceFog"
             float _FogStart;
             float _FogEnd;
             float _SkyFogStrength;
+            float _DebugDepth;
 
             fixed4 frag(v2f_img i) : SV_Target
             {
                 fixed4 scene = tex2D(_MainTex, i.uv);
                 float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
                 float eyeDepth = LinearEyeDepth(rawDepth);
+
+                if (_DebugDepth > 0.5)
+                {
+                    #if defined(UNITY_REVERSED_Z)
+                    float isSky = step(rawDepth, 0.00001);
+                    #else
+                    float isSky = step(0.99999, rawDepth);
+                    #endif
+                    float depthView = saturate(eyeDepth / 100.0);
+                    float depthGray = lerp(depthView, 1.0, isSky);
+                    return fixed4(depthGray, depthGray, depthGray, 1.0);
+                }
 
                 float geometryFog = saturate((eyeDepth - _FogStart) / max(_FogEnd - _FogStart, 0.001));
                 geometryFog = geometryFog * geometryFog * (3.0 - 2.0 * geometryFog);
@@ -41,7 +54,12 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                 float horizonBand = 1.0 - smoothstep(0.015, 0.30, abs(worldDir.y));
                 float skyFog = horizonBand * _SkyFogStrength;
 
-                float fogAmount = lerp(geometryFog, skyFog, step(0.99999, rawDepth));
+                #if defined(UNITY_REVERSED_Z)
+                float isSkyPixel = step(rawDepth, 0.00001);
+                #else
+                float isSkyPixel = step(0.99999, rawDepth);
+                #endif
+                float fogAmount = lerp(geometryFog, skyFog, isSkyPixel);
                 scene.rgb = lerp(scene.rgb, _FogColor.rgb, saturate(fogAmount));
                 return scene;
             }
