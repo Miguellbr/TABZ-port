@@ -16,6 +16,7 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
     public Transform RifleAim { get; private set; }
 
     private Transform rigRoot;
+    private Transform anchorTransform;
     private Transform rightIdle;
     private Transform leftIdle;
     private Rigidbody rightHandBody;
@@ -35,6 +36,8 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
         }
 
         CreateCameraTargets(camera.transform);
+        weaponRoot.position = RifleAim.position;
+        weaponRoot.rotation = RifleAim.rotation;
         CreatePhysicsRig();
         CreateArmVisual();
         CreateWeaponHandTags(weaponRoot);
@@ -135,7 +138,8 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
         // replaces only that outermost connection; the original ragdoll joints
         // from torso through both hands remain CharacterJoints.
         GameObject anchorObject = new GameObject("Original TABZ Player Rig Anchor");
-        anchorObject.transform.SetParent(transform, false);
+        anchorTransform = anchorObject.transform;
+        anchorTransform.SetParent(transform, false);
         Rigidbody anchorBody = anchorObject.AddComponent<Rigidbody>();
         anchorBody.isKinematic = true;
         anchorBody.useGravity = false;
@@ -219,8 +223,8 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
             rigRoot.Find("Armature/Arm_Right"),
             rigRoot.Find("Armature/Hand_Right"),
             rigRoot.Find("Armature/Leg_Left_Upper"),
-            rigRoot.Find("Armature/Leg_Right_Upper"),
             rigRoot.Find("Armature/Leg_Left_Lower"),
+            rigRoot.Find("Armature/Leg_Right_Upper"),
             rigRoot.Find("Armature/Leg_Right_Lower")
         };
         renderer.rootBone = rigRoot.Find("Armature/hip");
@@ -403,6 +407,7 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
     private void OnDestroy()
     {
         if (rigRoot != null) Destroy(rigRoot.gameObject);
+        if (anchorTransform != null) Destroy(anchorTransform.gameObject);
         if (ReloadAim != null) Destroy(ReloadAim.gameObject);
         if (RifleAim != null) Destroy(RifleAim.gameObject);
         if (armMesh != null) Destroy(armMesh);
