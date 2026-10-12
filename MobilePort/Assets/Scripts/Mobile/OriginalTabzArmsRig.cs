@@ -14,6 +14,8 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
 
     public Transform ReloadAim { get; private set; }
     public Transform RifleAim { get; private set; }
+    public bool IsGrabbingWeapon { get { return grabbingWeapon; } }
+    public bool WeaponHeld { get { return rightWeaponJoint != null && leftWeaponJoint != null; } }
 
     private Transform rigRoot;
     private Transform anchorTransform;
