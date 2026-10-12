@@ -17,8 +17,13 @@ public class OfflinePrototypeWeapon : MonoBehaviour
     public float roundsPerSecond = 8f;
     public Func<OfflinePrototypeZombie> targetProvider;
     public Action onFire;
+    public Action<float> onReloadStarted;
+    [Tooltip("Temporary test duration; replace with the AK-74 serialized value when its original Weapon component is recovered.")]
+    public float reloadDuration = 1.5f;
 
     private float nextShot;
+    private bool reloading;
+    private float reloadFinishesAt;
 
     public int Ammo { get { return ammo; } }
     public int ReserveAmmo { get { return reserveAmmo; } }
@@ -36,8 +41,9 @@ public class OfflinePrototypeWeapon : MonoBehaviour
             reload |= Input.GetKeyDown(KeyCode.R);
         }
 
+        if (reloading && Time.time >= reloadFinishesAt) FinishReload();
         if (reload) Reload();
-        if ((fireHeld || firePressed) && Time.time >= nextShot)
+        if (!reloading && (fireHeld || firePressed) && Time.time >= nextShot)
         {
             if (ammo > 0) Fire();
             else nextShot = Time.time + 0.25f;
@@ -65,9 +71,17 @@ public class OfflinePrototypeWeapon : MonoBehaviour
 
     public void Reload()
     {
-        if (ammo >= magazineSize || reserveAmmo <= 0) return;
+        if (reloading || ammo >= magazineSize || reserveAmmo <= 0) return;
+        reloading = true;
+        reloadFinishesAt = Time.time + Mathf.Max(0.1f, reloadDuration);
+        if (onReloadStarted != null) onReloadStarted(reloadDuration);
+    }
+
+    private void FinishReload()
+    {
         int amount = Mathf.Min(magazineSize - ammo, reserveAmmo);
         ammo += amount;
         reserveAmmo -= amount;
+        reloading = false;
     }
 }
