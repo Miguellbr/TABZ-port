@@ -1,0 +1,109 @@
+name: Extract original TABZ haze context values
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/extract-haze-context-values.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download recovered original Unity project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 38074403676 --repo Miguellbr/TABZ-port --name tabz-assetripper-v5.1-Unity --dir recovered
+      - name: Extract serialized DeepSky context and zone values
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          root = pathlib.Path("recovered")
+          files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".asset", ".prefab", ".unity", ".mat", ".cs", ".meta"}]
+          keywords = [
+              "DS_HazeContext", "DS_HazeContextItem", "DS_HazeZone", "DS_HazeController",
+              "m_FogStartDistance", "m_FogDensityHeightFalloff", "m_FogOpacity",
+              "m_FogScatteringScale", "m_FogExtinctionScale", "m_FogScatteringDirection",
+              "m_FogAmbientLight", "m_FogDirectLight", "m_AirScatteringScale",
+              "m_AirDensityHeightFalloff", "m_HazeScatteringScale", "m_HazeDensityHeightFalloff",
+              "m_HazeScatteringDirection", "m_HazeSecondaryScatteringRatio",
+              "MyDay", "Night", "Snow", "LightHouse", "darknes"
+          ]
+          script_hits = []
+          object_hits = []
+          errors = []
+          for path in files:
+              try:
+                  text = path.read_text(encoding="utf-8", errors="replace")
+              except Exception as exc:
+                  errors.append(f"{path}: {type(exc).__name__}: {exc}")
+                  continue
+              lower = text.lower()
+              if path.suffix.lower() == ".cs" and any(k.lower() in lower for k in ("class DS_HazeContext", "class DS_HazeContextItem", "class DS_HazeZone", "class DS_HazeController")):
+                  script_hits.append({"path": path.as_posix(), "content": text[:30000]})
+              if path.suffix.lower() not in {".asset", ".prefab", ".unity", ".mat"}:
+                  continue
+              blocks = re.split(r"(?=^--- !u!)", text, flags=re.M)
+              for block in blocks:
+                  matched = [k for k in keywords if k.lower() in block.lower()]
+                  if not matched:
+                      continue
+                  object_hits.append({
+                      "path": path.as_posix(),
+                      "matched": matched,
+                      "block": block[:30000]
+                  })
+          report = {
+              "scanned_files": len(files),
+              "script_hits": script_hits,
+              "serialized_object_hits": object_hits,
+              "read_errors": errors
+          }
+          out = pathlib.Path("haze-context-values")
+          out.mkdir(exist_ok=True)
+          (out / "haze-context-values.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+          lines = [
+              "# Original TABZ DeepSky Haze context values",
+              "",
+              f"- Files scanned: {len(files)}",
+              f"- Matching script files: {len(script_hits)}",
+              f"- Serialized object blocks matching haze/context/zone fields: {len(object_hits)}",
+              f"- Read errors: {len(errors)}",
+              "",
+              "The excerpts below are copied from the AssetRipper reconstruction of the original v5.1 Unity project. Values are not inferred or normalized here.",
+              ""
+          ]
+          for item in script_hits:
+              lines += [f"## Script: {item['path']}", "", "```csharp", item["content"], "```", ""]
+          for i, item in enumerate(object_hits, 1):
+              lines += [f"## Serialized object {i}: {item['path']}", "", f"Matched: {', '.join(item['matched'])}", "", "```yaml", item["block"], "```", ""]
+          (out / "HAZE-CONTEXT-VALUES.md").write_text("\n".join(lines), encoding="utf-8")
+          print(f"FILES_SCANNED={len(files)}")
+          print(f"SCRIPTS_FOUND={len(script_hits)}")
+          print(f"OBJECT_BLOCKS_FOUND={len(object_hits)}")
+          print(f"READ_ERRORS={len(errors)}")
+          for item in script_hits:
+              print("\n===== SCRIPT", item["path"], "=====")
+              print(item["content"][:12000])
+          for i, item in enumerate(object_hits, 1):
+              print(f"\n===== OBJECT {i}: {item['path']} | MATCHES: {', '.join(item['matched'])} =====")
+              print(item["block"][:10000])
+          PY
+      - name: Add report to Actions summary
+        if: always()
+        run: '[ ! -f haze-context-values/HAZE-CONTEXT-VALUES.md ] || cat haze-context-values/HAZE-CONTEXT-VALUES.md >> "$GITHUB_STEP_SUMMARY"'
+      - name: Upload extracted values
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-original-haze-context-values
+          path: haze-context-values/
+          if-no-files-found: warn
+          retention-days: 14
