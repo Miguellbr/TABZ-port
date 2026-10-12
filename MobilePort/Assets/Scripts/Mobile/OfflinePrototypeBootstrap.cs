@@ -113,7 +113,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
 
         GameObject cameraObject = new GameObject("Prototype Camera");
         cameraObject.transform.SetParent(playerObject.transform, false);
-        cameraObject.transform.localPosition = new Vector3(0f, 1.55f, 0f);
+        cameraObject.transform.localPosition = new Vector3(0f, 2.1135998f, 0f);
         Camera camera = cameraObject.AddComponent<Camera>();
         camera.fieldOfView = 75f;
         // The recovered AK mesh reaches close to the camera because its prefab
