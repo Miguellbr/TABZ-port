@@ -75,8 +75,8 @@ jobs:
                   name_index = getattr(parameter, "m_NameIndex", None)
                   row = {
                       "name": index_to_name.get(name_index, f"<name-index-{name_index}>"),
-                      "register_index": getattr(parameter, "m_Index", None),
-                      "byte_offset": getattr(parameter, "m_OffsetInConstantBuffer", None),
+                      "byte_offset": getattr(parameter, "m_Index", None) if getattr(parameter, "m_Index", None) is not None else getattr(parameter, "m_OffsetInConstantBuffer", None),
+                      "float4_register": ((getattr(parameter, "m_Index", None) if getattr(parameter, "m_Index", None) is not None else getattr(parameter, "m_OffsetInConstantBuffer", None)) // 16) if (getattr(parameter, "m_Index", None) is not None or getattr(parameter, "m_OffsetInConstantBuffer", None) is not None) else None,
                       "array_size": getattr(parameter, "m_ArraySize", 0),
                   }
                   if matrix:
@@ -104,7 +104,15 @@ jobs:
                       "vectors": named_parameter_rows(getattr(buffer, "m_VectorParams", []), index_to_name),
                       "matrices": named_parameter_rows(getattr(buffer, "m_MatrixParams", []), index_to_name, matrix=True),
                   })
-              for field in ("m_TextureParams", "m_Samplers", "m_BufferParams", "m_UAVParams"):
+              textures = getattr(source, "m_TextureParams", None)
+              if textures is not None:
+                  result["textures"] = [{
+                      "name": index_to_name.get(getattr(texture, "m_NameIndex", None), f"<name-index-{getattr(texture, 'm_NameIndex', None)}>"),
+                      "slot": getattr(texture, "m_Index", None),
+                      "dimension": getattr(texture, "m_Dim", None),
+                      "sampler_index": getattr(texture, "m_SamplerIndex", None),
+                  } for texture in textures]
+              for field in ("m_Samplers", "m_BufferParams", "m_UAVParams"):
                   value = getattr(source, field, None)
                   if value is not None:
                       result[field] = plain(value)
