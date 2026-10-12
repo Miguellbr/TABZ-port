@@ -6,8 +6,9 @@ using UnityEngine;
 /// values are preserved. AssetRipper exported the original gradient shader
 /// as a white dummy, so the gradient shader in this project is reconstructed
 /// from the material's exposed properties.
-/// The original DeepSky Haze shader was not present in the export. A separate
-/// MobileDistanceFog camera effect supplies a mobile visual approximation.
+/// The original DeepSky Haze shader's functional ShaderLab/HLSL source was not
+/// recoverable as a Unity asset. MobileDistanceFog uses the recovered serialized
+/// contexts with a low-cost depth-based geometry approximation.
 /// </summary>
 public class OriginalTabzEnvironment : MonoBehaviour
 {
