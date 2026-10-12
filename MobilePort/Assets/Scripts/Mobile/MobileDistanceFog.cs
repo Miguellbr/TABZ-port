@@ -1,33 +1,34 @@
 using UnityEngine;
 
 /// <summary>
-/// Lightweight built-in-render-pipeline distance haze for the Android
-/// prototype. This is an approximation, not the original DeepSky Haze shader.
+/// Mobile Built-in Render Pipeline implementation driven by recovered TABZ
+/// DeepSky Haze context values. It reproduces the context data and a cheap
+/// depth-based extinction pass; it is not the original multi-pass PC shader.
 /// </summary>
 [RequireComponent(typeof(Camera))]
 public class MobileDistanceFog : MonoBehaviour
 {
-    private static readonly Color TabzHazeColor =
-        new Color(0.6911765f, 0.93610543f, 1f, 1f);
-
     private Camera targetCamera;
     private Material fogMaterial;
     private bool shaderFound;
     private string initializationError;
     private int renderImageCalls;
     private bool depthDebugEnabled;
+    private TabzHazeContextData.Settings activeSettings;
+    private TabzHazeContextData.ZoneKind activeZone = TabzHazeContextData.ZoneKind.General;
+    private TabzHazeZone[] zones;
+    private float nextContextRefresh;
 
-    [Range(0, 2)] public int profile = 1;
+    [Range(0f, 1f)]
+    public float normalizedDayTime = 0.5f;
+
     public bool fogEnabled = true;
-
-    private static readonly float[] FogStarts = { 24f, 12f, 5f };
-    private static readonly float[] FogEnds = { 85f, 58f, 38f };
-    private static readonly float[] SkyStrengths = { 0.22f, 0.42f, 0.62f };
 
     private void Awake()
     {
         targetCamera = GetComponent<Camera>();
         targetCamera.depthTextureMode |= DepthTextureMode.Depth;
+
         Shader shader = Resources.Load<Shader>("MobileDistanceFog");
         if (shader == null)
         {
@@ -36,6 +37,7 @@ public class MobileDistanceFog : MonoBehaviour
             enabled = false;
             return;
         }
+
         shaderFound = true;
         if (!shader.isSupported)
         {
@@ -44,21 +46,32 @@ public class MobileDistanceFog : MonoBehaviour
             enabled = false;
             return;
         }
+
         fogMaterial = new Material(shader);
         fogMaterial.hideFlags = HideFlags.HideAndDontSave;
-        ApplyProfile();
+        zones = FindObjectsOfType<TabzHazeZone>();
+        RefreshContext(true);
+    }
+
+    private void Update()
+    {
+        if (Time.unscaledTime >= nextContextRefresh)
+        {
+            nextContextRefresh = Time.unscaledTime + 0.25f;
+            RefreshContext(false);
+        }
     }
 
     public void SetFog(bool value)
     {
         fogEnabled = value;
-        ApplyProfile();
+        ApplySettings();
     }
 
-    public void SetProfile(int value)
+    public void SetContextTime(float value)
     {
-        profile = Mathf.Clamp(value, 0, 2);
-        ApplyProfile();
+        normalizedDayTime = Mathf.Clamp01(value);
+        RefreshContext(true);
     }
 
     public void ToggleDepthDebug()
@@ -68,13 +81,53 @@ public class MobileDistanceFog : MonoBehaviour
             fogMaterial.SetFloat("_DebugDepth", depthDebugEnabled ? 1f : 0f);
     }
 
-    private void ApplyProfile()
+    private void RefreshContext(bool force)
+    {
+        if (targetCamera == null || fogMaterial == null) return;
+
+        TabzHazeContextData.ZoneKind selectedZone = TabzHazeContextData.ZoneKind.General;
+        int selectedPriority = int.MinValue;
+
+        if (zones == null) zones = FindObjectsOfType<TabzHazeZone>();
+        for (int i = 0; i < zones.Length; i++)
+        {
+            TabzHazeZone candidate = zones[i];
+            if (candidate == null || !candidate.Contains(targetCamera.transform.position))
+                continue;
+
+            TabzHazeContextData.ZoneInfo info =
+                TabzHazeContextData.GetZoneInfo(candidate.zone);
+            if (info.priority > selectedPriority)
+            {
+                selectedPriority = info.priority;
+                selectedZone = candidate.zone;
+            }
+        }
+
+        if (!force && selectedZone == activeZone &&
+            Mathf.Approximately(activeSettings.extinction,
+                TabzHazeContextData.Evaluate(selectedZone, normalizedDayTime).extinction))
+            return;
+
+        activeZone = selectedZone;
+        activeSettings = TabzHazeContextData.Evaluate(activeZone, normalizedDayTime);
+        ApplySettings();
+    }
+
+    private void ApplySettings()
     {
         if (fogMaterial == null) return;
-        fogMaterial.SetColor("_FogColor", TabzHazeColor);
-        fogMaterial.SetFloat("_FogStart", FogStarts[profile]);
-        fogMaterial.SetFloat("_FogEnd", FogEnds[profile]);
-        fogMaterial.SetFloat("_SkyFogStrength", SkyStrengths[profile]);
+
+        fogMaterial.SetColor("_FogColor", activeSettings.ambient);
+        fogMaterial.SetFloat("_FogExtinction", activeSettings.extinction);
+        fogMaterial.SetFloat("_FogHeightFalloff", activeSettings.heightFalloff);
+        fogMaterial.SetFloat("_FogOpacity", activeSettings.opacity);
+        // The original fogoff command changes the start distance to 5; it
+        // does not remove the entire atmosphere.
+        fogMaterial.SetFloat("_FogStartDistance",
+            fogEnabled ? activeSettings.startDistance : 5f);
+        fogMaterial.SetFloat("_CameraHeight", targetCamera != null
+            ? targetCamera.transform.position.y : 0f);
     }
 
     public string GetDiagnosticStatus()
@@ -83,9 +136,15 @@ public class MobileDistanceFog : MonoBehaviour
             (targetCamera.depthTextureMode & DepthTextureMode.Depth) != 0;
         string shaderStatus = !shaderFound ? "não" :
             (fogMaterial != null && fogMaterial.shader.isSupported ? "OK" : "erro");
-        string renderStatus = renderImageCalls > 0 ? renderImageCalls.ToString() + " chamadas" : "NÃO chamado";
-        string errorStatus = string.IsNullOrEmpty(initializationError) ? "nenhum" : initializationError;
+        string renderStatus = renderImageCalls > 0
+            ? renderImageCalls.ToString() + " chamadas" : "NÃO chamado";
+        string errorStatus = string.IsNullOrEmpty(initializationError)
+            ? "nenhum" : initializationError;
         return "Modo: " + (depthDebugEnabled ? "VISUALIZANDO DEPTH" : "névoa") +
+            " | Zona: " + activeZone +
+            " | Hora normalizada: " + normalizedDayTime.ToString("0.000") +
+            " | Extinção: " + activeSettings.extinction.ToString("0.0000") +
+            " | Densidade vertical: " + activeSettings.heightFalloff.ToString("0.0000") +
             " | Câmera: " + (targetCamera != null ? "OK" : "ausente") +
             " | Shader: " + shaderStatus +
             " | Depth: " + (depthRequested ? "solicitado" : "não") +
@@ -96,7 +155,7 @@ public class MobileDistanceFog : MonoBehaviour
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         renderImageCalls++;
-        if (!fogEnabled || fogMaterial == null)
+        if (fogMaterial == null)
         {
             Graphics.Blit(source, destination);
             return;
