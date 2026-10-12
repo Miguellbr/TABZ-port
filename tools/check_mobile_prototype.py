@@ -13,7 +13,7 @@ FILES = {
     "OfflinePrototypeWeapon.cs": ["class OfflinePrototypeWeapon", "void Fire()", "void Reload()", "Physics.Raycast"],
     "OfflinePrototypeZombie.cs": ["class OfflinePrototypeZombie", "TakeDamage", "IsDead"],
     "OriginalWeaponVisualBridge.cs": ["class OriginalWeaponVisualBridge", "Resources.Load<GameObject>", "OriginalTabzArmsRig", "MoveWeaponToOriginalAim"],
-    "OriginalTabzArmsRig.cs": ["class OriginalTabzArmsRig", "CharacterJoint", "ConfigurableJoint", "Resources.Load<Mesh>", "boneWeights", "WeaponPosition", "WeaponRightHandTag", "ReloadAimTag"],
+    "OriginalTabzArmsRig.cs": ["class OriginalTabzArmsRig", "CharacterJoint", "ConfigurableJoint", "CapsuleCollider", "SuperSlippery", "Resources.Load<Mesh>", "boneWeights", "WeaponPosition", "WeaponRightHandTag", "ReloadAimTag"],
     "MobileDistanceFog.cs": ["class MobileDistanceFog", "TabzHazeContextData.Evaluate", '"_FogExtinction"', "SetFog(bool value)"],
     "TabzHazeContextData.cs": ["class TabzHazeContextData", "0.015f", "0.0001f", "0.6653145f", "EvaluateNightCurve"],
     "TabzHazeZone.cs": ["class TabzHazeZone", "Collider.ClosestPoint", "GetComponent<Collider>"],
