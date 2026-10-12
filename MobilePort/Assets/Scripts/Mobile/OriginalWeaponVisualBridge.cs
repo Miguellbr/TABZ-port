@@ -30,6 +30,19 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
     public GameObject placeholderToHide;
 
     private GameObject spawnedWeapon;
+    private Transform weaponVisualTransform;
+    private Quaternion weaponBaseRotation;
+    private float recoilStartTime = -1f;
+
+    // Recovered from the original TABS_Player_Network prefab's CameraMovement.forceCurve.
+    // AK-74 settings: forceShake=(5,0,0), forceShakeTime=0.3.
+    private readonly AnimationCurve originalAk74RecoilCurve = new AnimationCurve(
+        new Keyframe(0f, 0f, 15.573248f, 15.573248f),
+        new Keyframe(0.08486544f, 0.5940055f, 1.4796853f, 1.4796853f),
+        new Keyframe(0.4710793f, 0.34228253f, -1.4810432f, -1.4810432f),
+        new Keyframe(1f, 0f, 0f, 0f));
+    private readonly Vector3 originalAk74ForceShake = new Vector3(5f, 0f, 0f);
+    private const float OriginalAk74ForceShakeTime = 0.3f;
 
     private void Start()
     {
@@ -54,6 +67,8 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
         t.localPosition = localPosition;
         t.localRotation = Quaternion.Euler(localEulerAngles);
         t.localScale = localScale;
+        weaponVisualTransform = t;
+        weaponBaseRotation = t.localRotation;
 
         // The recovered prefab includes colliders and network/gameplay components.
         // Keep its render hierarchy only; local combat is handled by OfflinePrototypeWeapon.
@@ -96,6 +111,34 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
 
         if (placeholderToHide != null) placeholderToHide.SetActive(false);
         Debug.Log("OriginalWeaponVisualBridge: loaded visual prefab Resources/" + resourcesPrefabPath);
+    }
+
+    /// <summary>
+    /// Plays the recovered AK-74 transient recoil curve on the first-person weapon.
+    /// TABZ applies this force to a camera-force child; this offline port applies
+    /// the same curve to the weapon visual because it has no original camera rig.
+    /// </summary>
+    public void PlayFireRecoil()
+    {
+        if (weaponVisualTransform == null) return;
+        recoilStartTime = Time.time;
+    }
+
+    private void Update()
+    {
+        if (weaponVisualTransform == null || recoilStartTime < 0f) return;
+
+        float elapsed = Time.time - recoilStartTime;
+        float normalizedTime = Mathf.Clamp01(elapsed / OriginalAk74ForceShakeTime);
+        float curveValue = originalAk74RecoilCurve.Evaluate(normalizedTime);
+        weaponVisualTransform.localRotation =
+            weaponBaseRotation * Quaternion.Euler(-originalAk74ForceShake * curveValue);
+
+        if (elapsed >= OriginalAk74ForceShakeTime)
+        {
+            weaponVisualTransform.localRotation = weaponBaseRotation;
+            recoilStartTime = -1f;
+        }
     }
 
     private void OnDestroy()
