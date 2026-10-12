@@ -12,6 +12,9 @@ public class MobileDistanceFog : MonoBehaviour
 
     private Camera targetCamera;
     private Material fogMaterial;
+    private bool shaderFound;
+    private string initializationError;
+    private int renderImageCalls;
 
     [Range(0, 2)] public int profile = 1;
     public bool fogEnabled = true;
@@ -27,7 +30,16 @@ public class MobileDistanceFog : MonoBehaviour
         Shader shader = Resources.Load<Shader>("MobileDistanceFog");
         if (shader == null)
         {
-            Debug.LogError("MobileDistanceFog: Resources/MobileDistanceFog shader not found.");
+            initializationError = "Shader não encontrado em Resources";
+            Debug.LogError("MobileDistanceFog: " + initializationError + ".");
+            enabled = false;
+            return;
+        }
+        shaderFound = true;
+        if (!shader.isSupported)
+        {
+            initializationError = "Shader não suportado neste aparelho";
+            Debug.LogError("MobileDistanceFog: " + initializationError + ".");
             enabled = false;
             return;
         }
@@ -57,8 +69,24 @@ public class MobileDistanceFog : MonoBehaviour
         fogMaterial.SetFloat("_SkyFogStrength", SkyStrengths[profile]);
     }
 
+    public string GetDiagnosticStatus()
+    {
+        bool depthRequested = targetCamera != null &&
+            (targetCamera.depthTextureMode & DepthTextureMode.Depth) != 0;
+        string shaderStatus = !shaderFound ? "não" :
+            (fogMaterial != null && fogMaterial.shader.isSupported ? "OK" : "erro");
+        string renderStatus = renderImageCalls > 0 ? renderImageCalls.ToString() + " chamadas" : "NÃO chamado";
+        string errorStatus = string.IsNullOrEmpty(initializationError) ? "nenhum" : initializationError;
+        return "Câmera: " + (targetCamera != null ? "OK" : "ausente") +
+            " | Shader: " + shaderStatus +
+            " | Depth: " + (depthRequested ? "solicitado" : "não") +
+            " | Render: " + renderStatus +
+            " | Erro: " + errorStatus;
+    }
+
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
+        renderImageCalls++;
         if (!fogEnabled || fogMaterial == null)
         {
             Graphics.Blit(source, destination);
