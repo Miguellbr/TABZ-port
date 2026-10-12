@@ -133,6 +133,10 @@ else:
         'PlayerSettings.applicationIdentifier = "com.miguellbr.tabzmobileprototype"',
         'Path.Combine(outputDirectory, "TABZ-Mobile-Prototype.apk")',
         "visibleRenderers == 0",
+        "Resources.Load<Mesh>(ArmMeshResourcePath)",
+        "Resources.Load<Material>(ArmMaterialResourcePath)",
+        "originalArmsMesh.bindposes.Length != 11",
+        "GetArmWeight",
     ):
         if token not in build_source:
             errors.append(f"TABZMobileBuild.cs: missing expected token {token!r}")
