@@ -12,7 +12,8 @@ FILES = {
     "OfflinePrototypePlayer.cs": ["class OfflinePrototypePlayer", "CharacterController", "ConsumeLookDelta", "Input.GetAxisRaw"],
     "OfflinePrototypeWeapon.cs": ["class OfflinePrototypeWeapon", "void Fire()", "void Reload()", "Physics.Raycast"],
     "OfflinePrototypeZombie.cs": ["class OfflinePrototypeZombie", "TakeDamage", "IsDead"],
-    "OriginalWeaponVisualBridge.cs": ["class OriginalWeaponVisualBridge", "Resources.Load<GameObject>", "viewCamera.transform"],
+    "OriginalWeaponVisualBridge.cs": ["class OriginalWeaponVisualBridge", "Resources.Load<GameObject>", "OriginalTabzArmsRig", "MoveWeaponToOriginalAim"],
+    "OriginalTabzArmsRig.cs": ["class OriginalTabzArmsRig", "CharacterJoint", "ConfigurableJoint", "Resources.Load<Mesh>", "boneWeights", "WeaponPosition", "WeaponRightHandTag", "ReloadAimTag"],
     "MobileDistanceFog.cs": ["class MobileDistanceFog", "TabzHazeContextData.Evaluate", '"_FogExtinction"', "SetFog(bool value)"],
     "TabzHazeContextData.cs": ["class TabzHazeContextData", "0.015f", "0.0001f", "0.6653145f", "EvaluateNightCurve"],
     "TabzHazeZone.cs": ["class TabzHazeZone", "Collider.ClosestPoint", "GetComponent<Collider>"],
@@ -83,6 +84,8 @@ for filename, required in FILES.items():
 # The recovered AK-74 must be committed and the runtime bootstrap must actually attach its visual bridge.
 required_assets = [
     ROOT / "MobilePort" / "Assets" / "Resources" / "items" / "Ak74.prefab",
+    ROOT / "MobilePort" / "Assets" / "Resources" / "OriginalRig" / "RealHumanBean_0.asset",
+    ROOT / "MobilePort" / "Assets" / "Resources" / "OriginalRig" / "redd.mat",
     ROOT / "MobilePort" / "Assets" / "Mesh" / "AK_47.asset",
 ]
 for asset in required_assets:
