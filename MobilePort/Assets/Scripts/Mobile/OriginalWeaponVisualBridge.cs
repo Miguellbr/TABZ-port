@@ -15,7 +15,11 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
     [Header("First-person mount")]
     public Camera viewCamera;
     public Vector3 localPosition = new Vector3(0.28f, -0.24f, 0.48f);
-    public Vector3 localEulerAngles = new Vector3(0f, 180f, 0f);
+
+    // The AK mesh's long axis is local X. Its prefab child transform rotates that
+    // axis onto local +Z, which is the camera's forward direction. An extra 180°
+    // yaw here reverses it toward the camera, so keep the mount rotation neutral.
+    public Vector3 localEulerAngles = Vector3.zero;
     public Vector3 localScale = Vector3.one;
 
     [Tooltip("If true, hides the prototype's placeholder weapon when the original model loads.")]
