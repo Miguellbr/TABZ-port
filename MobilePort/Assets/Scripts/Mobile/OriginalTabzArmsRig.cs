@@ -23,6 +23,12 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
     private Rigidbody leftHandBody;
     private ConfigurableJoint rightWeaponJoint;
     private ConfigurableJoint leftWeaponJoint;
+    private Rigidbody weaponBody;
+    private Transform rightWeaponTag;
+    private Transform leftWeaponTag;
+    private bool grabbingWeapon;
+    private bool hasGrabbedRight;
+    private float grabStartedAt;
     private Mesh armMesh;
     private string visualStatus = "não inicializado";
 
@@ -41,7 +47,7 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
         CreatePhysicsRig();
         CreateArmVisual();
         CreateWeaponHandTags(weaponRoot);
-        AttachHandsToWeapon(weaponBody, weaponRoot);
+        BeginWeaponGrab(weaponBody, weaponRoot);
         visualStatus = "braços originais filtrados do mesh; juntas físicas conectadas";
         Debug.Log("OriginalTabzArmsRig: " + GetDiagnosticStatus());
     }
@@ -286,15 +292,23 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
         return tag.transform;
     }
 
-    private void AttachHandsToWeapon(Rigidbody weaponBody, Transform weaponRoot)
+    private void BeginWeaponGrab(Rigidbody body, Transform weaponRoot)
     {
-        Transform rightTag = weaponRoot.Find("WeaponRightHandTag");
-        Transform leftTag = weaponRoot.Find("WeaponLeftHandTag");
-        AlignHandToTag(rightHandBody.transform, rightTag);
-        AlignHandToTag(leftHandBody.transform, leftTag);
-        rightWeaponJoint = CreateWeaponJoint(rightHandBody, weaponBody);
-        leftWeaponJoint = CreateWeaponJoint(leftHandBody, weaponBody);
-        weaponBody.constraints = RigidbodyConstraints.None;
+        weaponBody = body;
+        rightWeaponTag = weaponRoot.Find("WeaponRightHandTag");
+        leftWeaponTag = weaponRoot.Find("WeaponLeftHandTag");
+        if (rightWeaponTag == null || leftWeaponTag == null)
+        {
+            visualStatus = "tags de pegada da AK ausentes";
+            Debug.LogError("OriginalTabzArmsRig: " + visualStatus);
+            return;
+        }
+
+        // WeaponHandler waits 0.2 s, then pulls the right hand into place first.
+        weaponBody.constraints = RigidbodyConstraints.FreezeRotation;
+        grabbingWeapon = true;
+        hasGrabbedRight = false;
+        grabStartedAt = Time.time;
     }
 
     private static void AlignHandToTag(Transform hand, Transform tag)
@@ -319,10 +333,59 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
 
     private void Update()
     {
+        if (grabbingWeapon)
+        {
+            if (weaponBody == null || RifleAim == null) return;
+            weaponBody.transform.position = RifleAim.position;
+            weaponBody.transform.rotation = RifleAim.rotation;
+
+            if (Time.time - grabStartedAt >= 0.2f)
+            {
+                if (!hasGrabbedRight)
+                {
+                    PullHandToTag(rightHandBody, rightWeaponTag);
+                    if (Vector3.Distance(rightWeaponTag.position,
+                        rightHandBody.transform.GetChild(1).position) < 0.1f)
+                    {
+                        AlignHandToTag(rightHandBody.transform, rightWeaponTag);
+                        rightWeaponJoint = CreateWeaponJoint(rightHandBody, weaponBody);
+                        hasGrabbedRight = true;
+                    }
+                }
+
+                if (hasGrabbedRight && leftWeaponJoint == null)
+                {
+                    PullHandToTag(leftHandBody, leftWeaponTag);
+                    if (Vector3.Distance(leftWeaponTag.position,
+                        leftHandBody.transform.GetChild(1).position) < 0.1f)
+                    {
+                        AlignHandToTag(leftHandBody.transform, leftWeaponTag);
+                        leftWeaponJoint = CreateWeaponJoint(leftHandBody, weaponBody);
+                    }
+                }
+            }
+
+            weaponBody.velocity = Vector3.zero;
+            if (rightWeaponJoint != null && leftWeaponJoint != null)
+            {
+                grabbingWeapon = false;
+                weaponBody.constraints = RigidbodyConstraints.None;
+            }
+            return;
+        }
+
         if (rightHandBody != null && rightWeaponJoint == null && rightIdle != null)
             MoveRig(rightHandBody, rightIdle, 0f, 100f, true);
         if (leftHandBody != null && leftWeaponJoint == null && leftIdle != null)
             MoveRig(leftHandBody, leftIdle, 0f, 100f, true);
+    }
+
+    private static void PullHandToTag(Rigidbody hand, Transform tag)
+    {
+        if (hand == null || tag == null) return;
+        Vector3 offset = tag.position - hand.transform.GetChild(1).position;
+        if (offset.sqrMagnitude > 0.000001f)
+            hand.velocity += offset.normalized * 10f;
     }
 
     private static void MoveRig(Rigidbody body, Transform target, float force, float torque, bool fixer)
@@ -398,8 +461,10 @@ public sealed class OriginalTabzArmsRig : MonoBehaviour
 
     public string GetDiagnosticStatus()
     {
+        string handStatus = rightWeaponJoint != null && leftWeaponJoint != null ? "2 conectadas" :
+            grabbingWeapon ? "encaixando mãos" : "não conectadas";
         return "Braços: " + (rightHandBody != null && leftHandBody != null ? "2 mãos físicas" : "incompletos") +
-               " | Juntas da arma: " + ((rightWeaponJoint != null && leftWeaponJoint != null) ? "2 conectadas" : "não conectadas") +
+               " | Juntas da arma: " + handStatus +
                " | Visual: " + visualStatus +
                " | ReloadAim: " + (ReloadAim != null ? "OK" : "ausente");
     }
