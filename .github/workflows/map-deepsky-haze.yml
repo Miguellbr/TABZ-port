@@ -69,7 +69,23 @@ jobs:
                           if not k.startswith("_") and k not in {"m_ProgramCode"}}
               return repr(value)[:300]
 
-          def stage_info(stage):
+          def named_parameter_rows(parameters, index_to_name, matrix=False):
+              rows = []
+              for parameter in parameters or []:
+                  name_index = getattr(parameter, "m_NameIndex", None)
+                  row = {
+                      "name": index_to_name.get(name_index, f"<name-index-{name_index}>"),
+                      "offset": getattr(parameter, "m_Index", None),
+                      "array_size": getattr(parameter, "m_ArraySize", 0),
+                  }
+                  if matrix:
+                      row["row_count"] = getattr(parameter, "m_RowCount", None)
+                  else:
+                      row["dimension"] = getattr(parameter, "m_Dim", None)
+                  rows.append(row)
+              return rows
+
+          def stage_info(stage, index_to_name):
               if stage is None:
                   return None
               entries = []
@@ -85,13 +101,29 @@ jobs:
                           value = plain(value)
                       row[field] = value
                   entries.append(row)
-              stage_fields = {}
-              for field in ("m_ConstantBuffers", "m_ConstantBufferBindings", "m_VectorParams",
-                            "m_MatrixParams", "m_TextureParams", "m_Samplers"):
-                  value = getattr(stage, field, None)
-                  if value is not None:
-                      stage_fields[field] = plain(value)
-              return {"stage_metadata": stage_fields, "variants": entries}
+
+              common = getattr(stage, "m_CommonParameters", None)
+              common_data = {"constant_buffer_bindings": [], "constant_buffers": []}
+              if common is not None:
+                  for binding in getattr(common, "m_ConstantBufferBindings", []) or []:
+                      ni = getattr(binding, "m_NameIndex", None)
+                      common_data["constant_buffer_bindings"].append({
+                          "name": index_to_name.get(ni, f"<name-index-{ni}>"),
+                          "slot": getattr(binding, "m_Index", None),
+                      })
+                  for buffer in getattr(common, "m_ConstantBuffers", []) or []:
+                      ni = getattr(buffer, "m_NameIndex", None)
+                      common_data["constant_buffers"].append({
+                          "name": index_to_name.get(ni, f"<name-index-{ni}>"),
+                          "size_bytes": getattr(buffer, "m_Size", None),
+                          "vectors": named_parameter_rows(getattr(buffer, "m_VectorParams", []), index_to_name),
+                          "matrices": named_parameter_rows(getattr(buffer, "m_MatrixParams", []), index_to_name, matrix=True),
+                      })
+                  for field in ("m_TextureParams", "m_Samplers", "m_BufferParams", "m_UAVParams"):
+                      value = getattr(common, field, None)
+                      if value is not None:
+                          common_data[field] = plain(value)
+              return {"common_parameters": common_data, "variants": entries}
 
           def get_attr(obj, *names):
               for name in names:
@@ -125,14 +157,20 @@ jobs:
                           for si, subshader in enumerate(getattr(parsed, "m_SubShaders", []) or []):
                               sub_row = {"subshader_index": si, "passes": []}
                               for pi, shader_pass in enumerate(getattr(subshader, "m_Passes", []) or []):
-                                  pass_name = get_attr(shader_pass, "m_Name", "name")
+                                  state = get_attr(shader_pass, "m_State")
+                                  pass_name = get_attr(state, "m_Name") or get_attr(shader_pass, "m_Name", "name")
+                                  name_indices = get_attr(shader_pass, "m_NameIndices") or {}
+                                  index_to_name = {int(v): k for k, v in name_indices.items() if isinstance(v, int)}
                                   vertex = get_attr(shader_pass, "progVertex", "m_ProgVertex")
                                   fragment = get_attr(shader_pass, "progFragment", "m_ProgFragment")
+                                  serialized = get_attr(shader_pass, "m_SerializedProgram")
                                   sub_row["passes"].append({
                                       "pass_index": pi,
                                       "name": str(pass_name or ""),
-                                      "vertex": stage_info(vertex),
-                                      "fragment": stage_info(fragment)
+                                      "name_indices": name_indices,
+                                      "vertex": stage_info(vertex, index_to_name),
+                                      "fragment": stage_info(fragment, index_to_name),
+                                      "serialized_program": plain(serialized) if serialized is not None else None
                                   })
                               shader_row["subshaders"].append(sub_row)
 
@@ -181,8 +219,8 @@ jobs:
                           print(f"  {stage_name}: {len(variants)} serialized variants")
                           for v in variants:
                               print("   ", json.dumps({k:v.get(k) for k in ("subprogram_index","m_BlobIndex","m_GpuProgramType","m_ShaderHardwareTier","m_Keywords","m_ShaderRequirements") if k in v}, default=str))
-                          if stage["stage_metadata"]:
-                              print("  reflection:", json.dumps(stage["stage_metadata"], default=str)[:5000])
+                          if stage["common_parameters"]:
+                              print("  named cbuffer reflection:", json.dumps(stage["common_parameters"], default=str)[:12000])
               print("DX11 table entries:", len(shader.get("dx11_program_table", [])))
               for entry in shader.get("dx11_program_table", []):
                   print("  DX11", json.dumps(entry, default=str))
