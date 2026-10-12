@@ -160,14 +160,28 @@ jobs:
                                   state = get_attr(shader_pass, "m_State")
                                   pass_name = get_attr(state, "m_Name") or get_attr(shader_pass, "m_Name", "name")
                                   name_indices = get_attr(shader_pass, "m_NameIndices") or {}
-                                  index_to_name = {int(v): k for k, v in name_indices.items() if isinstance(v, int)}
+                                  if isinstance(name_indices, dict):
+                                      index_to_name = {int(v): k for k, v in name_indices.items() if isinstance(v, int)}
+                                  else:
+                                      index_to_name = {}
+                                      for entry in name_indices:
+                                          if isinstance(entry, dict):
+                                              entry_name = entry.get("m_Name", entry.get("name", entry.get("first")))
+                                              entry_index = entry.get("m_Index", entry.get("index", entry.get("second")))
+                                          elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                                              entry_name, entry_index = entry[0], entry[1]
+                                          else:
+                                              entry_name = getattr(entry, "m_Name", getattr(entry, "name", getattr(entry, "first", None)))
+                                              entry_index = getattr(entry, "m_Index", getattr(entry, "index", getattr(entry, "second", None)))
+                                          if isinstance(entry_name, str) and isinstance(entry_index, int):
+                                              index_to_name[entry_index] = entry_name
                                   vertex = get_attr(shader_pass, "progVertex", "m_ProgVertex")
                                   fragment = get_attr(shader_pass, "progFragment", "m_ProgFragment")
                                   serialized = get_attr(shader_pass, "m_SerializedProgram")
                                   sub_row["passes"].append({
                                       "pass_index": pi,
                                       "name": str(pass_name or ""),
-                                      "name_indices": name_indices,
+                                      "name_indices": plain(name_indices),
                                       "vertex": stage_info(vertex, index_to_name),
                                       "fragment": stage_info(fragment, index_to_name),
                                       "serialized_program": plain(serialized) if serialized is not None else None
