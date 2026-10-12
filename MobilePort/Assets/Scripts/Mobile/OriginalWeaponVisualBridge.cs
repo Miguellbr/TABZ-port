@@ -191,8 +191,9 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
         float force, float torque, bool fixedTime)
     {
         float delta = fixedTime ? Time.fixedDeltaTime : 0.0166f;
-        Vector3 forward = rig.transform.childCount > 0
-            ? rig.transform.GetChild(0).forward : rig.transform.forward;
+        // Normal weapon holding uses fixer=false in the original MoveRig,
+        // so it aligns the Rigidbody root's forward axis, not the mesh child.
+        Vector3 forward = rig.transform.forward;
         Vector3 targetForward = rotation * Vector3.forward;
         float angle = Vector3.Angle(forward, targetForward);
         Vector3 axis = Vector3.Cross(forward, targetForward);
