@@ -16,6 +16,7 @@ public class OfflinePrototypeWeapon : MonoBehaviour
     public float range = 100f;
     public float roundsPerSecond = 8f;
     public Func<OfflinePrototypeZombie> targetProvider;
+    public Action onFire;
 
     private float nextShot;
 
@@ -50,6 +51,7 @@ public class OfflinePrototypeWeapon : MonoBehaviour
     {
         nextShot = Time.time + 1f / Mathf.Max(1f, roundsPerSecond);
         ammo--;
+        if (onFire != null) onFire();
         if (viewCamera == null) return;
 
         Ray ray = viewCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
