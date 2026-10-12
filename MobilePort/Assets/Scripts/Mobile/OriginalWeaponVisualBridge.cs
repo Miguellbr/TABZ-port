@@ -14,7 +14,11 @@ public class OriginalWeaponVisualBridge : MonoBehaviour
 
     [Header("First-person mount")]
     public Camera viewCamera;
-    public Vector3 localPosition = new Vector3(0.28f, -0.24f, 0.48f);
+    // The AK mesh AABB extends 0.68 units along its long axis. In this prefab,
+    // that axis is rotated into depth and its child origin is at z=0.11185449.
+    // With the camera near plane at 0.05, z=0.62 keeps the rear extent just
+    // beyond the near plane instead of slicing through the mesh.
+    public Vector3 localPosition = new Vector3(0.28f, -0.24f, 0.62f);
 
     // The AK mesh's long axis is local X. Its prefab child transform rotates that
     // axis onto local +Z, which is the camera's forward direction. An extra 180°
