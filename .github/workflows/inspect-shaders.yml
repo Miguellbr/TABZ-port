@@ -94,5 +94,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: tabz-original-shader-report
-          path: shader-report.json
+          path: |
+            shader-report.json
+            exported-shaders/
           retention-days: 14
