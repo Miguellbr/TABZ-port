@@ -1,0 +1,227 @@
+name: Map original DeepSky Haze pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/map-deepsky-haze.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  map:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download previously extracted original TABZ builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh run download 38002674886 --repo Miguellbr/TABZ-port --name tabz-extracted-two-versions --dir extracted
+
+      - name: Install analysis tools
+        shell: pwsh
+        run: |
+          python -m pip install UnityPy
+          dotnet tool install ilspycmd --tool-path "$env:RUNNER_TEMP\ilspy"
+          "$env:RUNNER_TEMP\ilspy" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Map serialized shader passes to compiled programs
+        shell: pwsh
+        run: |
+          @'
+          import json
+          from pathlib import Path
+          import UnityPy
+          from UnityPy.export.ShaderConverter import ShaderProgram
+          from UnityPy.helpers import CompressionHelper
+          from UnityPy.streams import EndianBinaryReader
+
+          TARGETS = {"Hidden/DS_Haze", "Hidden/DS_HazeLightVolume", "Hidden/Post FX/Fog"}
+          FIELDS = (
+              "m_BlobIndex", "m_Keywords", "m_GpuProgramType", "m_ShaderHardwareTier",
+              "m_ShaderRequirements", "m_SourceMap", "m_VectorParams", "m_MatrixParams",
+              "m_TextureParams", "m_BufferParams", "m_ConstantBuffers",
+              "m_ConstantBufferBindings", "m_Samplers", "m_UAVParams"
+          )
+
+          def enum_text(value):
+              if value is None:
+                  return None
+              return getattr(value, "name", str(value))
+
+          def plain(value, depth=0):
+              if depth > 4:
+                  return repr(value)[:200]
+              if value is None or isinstance(value, (str, int, float, bool)):
+                  return value
+              if isinstance(value, (bytes, bytearray)):
+                  return f"<{len(value)} bytes>"
+              if isinstance(value, (list, tuple)):
+                  return [plain(x, depth + 1) for x in value[:100]]
+              if hasattr(value, "__dict__"):
+                  return {k: plain(v, depth + 1) for k, v in vars(value).items()
+                          if not k.startswith("_") and k not in {"m_ProgramCode"}}
+              return repr(value)[:300]
+
+          def stage_info(stage):
+              if stage is None:
+                  return None
+              entries = []
+              for index, sub in enumerate(getattr(stage, "m_SubPrograms", []) or []):
+                  row = {"subprogram_index": index}
+                  for field in FIELDS:
+                      value = getattr(sub, field, None)
+                      if value is None:
+                          continue
+                      if field == "m_GpuProgramType":
+                          value = enum_text(value)
+                      else:
+                          value = plain(value)
+                      row[field] = value
+                  entries.append(row)
+              stage_fields = {}
+              for field in ("m_ConstantBuffers", "m_ConstantBufferBindings", "m_VectorParams",
+                            "m_MatrixParams", "m_TextureParams", "m_Samplers"):
+                  value = getattr(stage, field, None)
+                  if value is not None:
+                      stage_fields[field] = plain(value)
+              return {"stage_metadata": stage_fields, "variants": entries}
+
+          def get_attr(obj, *names):
+              for name in names:
+                  value = getattr(obj, name, None)
+                  if value is not None:
+                      return value
+              return None
+
+          root = Path("extracted/version-2")
+          assets = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".assets", ".asset", ".bundle", ".unity3d"})
+          report = {"assets_scanned": 0, "shaders": [], "errors": []}
+          for path in assets:
+              try:
+                  env = UnityPy.load(str(path))
+                  report["assets_scanned"] += 1
+                  for obj in env.objects:
+                      if obj.type.name != "Shader":
+                          continue
+                      try:
+                          shader = obj.parse_as_object()
+                          parsed = getattr(shader, "m_ParsedForm", None)
+                          name = getattr(parsed, "m_Name", "") if parsed else ""
+                          if name not in TARGETS:
+                              continue
+                          shader_row = {
+                              "name": name,
+                              "asset": path.relative_to(root).as_posix(),
+                              "path_id": int(obj.path_id),
+                              "subshaders": []
+                          }
+                          for si, subshader in enumerate(getattr(parsed, "m_SubShaders", []) or []):
+                              sub_row = {"subshader_index": si, "passes": []}
+                              for pi, shader_pass in enumerate(getattr(subshader, "m_Passes", []) or []):
+                                  pass_name = get_attr(shader_pass, "m_Name", "name")
+                                  vertex = get_attr(shader_pass, "progVertex", "m_ProgVertex")
+                                  fragment = get_attr(shader_pass, "progFragment", "m_ProgFragment")
+                                  sub_row["passes"].append({
+                                      "pass_index": pi,
+                                      "name": str(pass_name or ""),
+                                      "vertex": stage_info(vertex),
+                                      "fragment": stage_info(fragment)
+                                  })
+                              shader_row["subshaders"].append(sub_row)
+
+                          # Match the pass references to the DX11 program table used by UnityPy.
+                          platform_index = next((i for i, p in enumerate(shader.platforms) if int(p) == 4), None)
+                          if platform_index is not None:
+                              size = shader.compressedLengths[platform_index]
+                              offset = shader.offsets[platform_index]
+                              decompressed_size = shader.decompressedLengths[platform_index]
+                              blob = bytes(shader.compressedBlob)[offset:offset + size]
+                              decompressed = CompressionHelper.decompress_lz4(blob, decompressed_size)
+                              program = ShaderProgram(
+                                  EndianBinaryReader(decompressed, endian="<"),
+                                  shader.object_reader.version
+                              )
+                              shader_row["dx11_program_table"] = [
+                                  {
+                                      "table_index": i,
+                                      "program_type": enum_text(getattr(sp, "m_ProgramType", None)),
+                                      "keywords": list(getattr(sp, "m_Keywords", []) or []),
+                                      "program_code_bytes": len(bytes(getattr(sp, "m_ProgramCode", b"") or b"")),
+                                      "dxbc_offset": bytes(getattr(sp, "m_ProgramCode", b"") or b"").find(b"DXBC")
+                                  }
+                                  for i, sp in enumerate(getattr(program, "m_SubPrograms", []) or [])
+                              ]
+                          report["shaders"].append(shader_row)
+                      except Exception as exc:
+                          report["errors"].append(f"{path}:{obj.path_id}: {type(exc).__name__}: {exc}")
+              except Exception as exc:
+                  report["errors"].append(f"{path}: {type(exc).__name__}: {exc}")
+
+          Path("haze-shader-pass-map.json").write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+          print("ASSETS_SCANNED", report["assets_scanned"])
+          print("TARGET_SHADERS", len(report["shaders"]))
+          print("ERRORS", len(report["errors"]))
+          for shader in report["shaders"]:
+              print(f"\n===== {shader['name']} | {shader['asset']} | path_id={shader['path_id']} =====")
+              for sub in shader["subshaders"]:
+                  for p in sub["passes"]:
+                      print(f"PASS {p['pass_index']}: {p['name']}")
+                      for stage_name in ("vertex", "fragment"):
+                          stage = p[stage_name]
+                          if not stage:
+                              continue
+                          variants = stage["variants"]
+                          print(f"  {stage_name}: {len(variants)} serialized variants")
+                          for v in variants:
+                              print("   ", json.dumps({k:v.get(k) for k in ("subprogram_index","m_BlobIndex","m_GpuProgramType","m_ShaderHardwareTier","m_Keywords","m_ShaderRequirements") if k in v}, default=str))
+                          if stage["stage_metadata"]:
+                              print("  reflection:", json.dumps(stage["stage_metadata"], default=str)[:5000])
+              print("DX11 table entries:", len(shader.get("dx11_program_table", [])))
+              for entry in shader.get("dx11_program_table", []):
+                  print("  DX11", json.dumps(entry, default=str))
+          for error in report["errors"][:50]:
+              print("ERROR", error)
+          '@ | Set-Content -Path map_shader_passes.py -Encoding utf8
+          python map_shader_passes.py
+
+      - name: Recover original C# haze controller and context code
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Path "extracted/version-2" -Filter "Assembly-CSharp.dll" -Recurse | Select-Object -First 1
+          if (-not $dll) { throw "Assembly-CSharp.dll not found in the original v5.1 build" }
+          $ilspy = Join-Path $env:RUNNER_TEMP "ilspy\ilspycmd.exe"
+          $classes = & $ilspy -l c $dll.FullName
+          $targets = $classes | ForEach-Object {
+            if ($_ -match '^Class\s+(.+)$') { $Matches[1] }
+            elseif ($_ -match '^\s*(.+)$') { $Matches[1].Trim() }
+          } | Where-Object { $_ -match 'DS_Haze(View|Context|Core|ContextItem|Zone)|TABZChat|DayNightCycle' } | Sort-Object -Unique
+          if (-not $targets) {
+            Write-Host "No matching type names found in class listing:"
+            $classes | Select-String -Pattern 'Haze|Fog|DayNight|TABZChat'
+            throw "Could not locate DeepSky Haze types in Assembly-CSharp.dll"
+          }
+          New-Item -ItemType Directory -Force -Path "haze-source" | Out-Null
+          foreach ($type in $targets) {
+            Write-Host "===== DECOMPILE TYPE: $type ====="
+            & $ilspy -t "$type" $dll.FullName 2>&1 | Tee-Object -FilePath "haze-source\$($type -replace '[^A-Za-z0-9_.-]','_').cs"
+          }
+          "Original DLL: $($dll.FullName)" | Set-Content "haze-source\SOURCE.txt"
+          "Recovered types: $($targets -join ', ')" | Add-Content "haze-source\SOURCE.txt"
+
+      - name: Upload shader mapping and recovered source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-deepsky-haze-mapping
+          path: |
+            haze-shader-pass-map.json
+            haze-source/
+          if-no-files-found: warn
+          retention-days: 14
