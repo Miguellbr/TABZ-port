@@ -90,7 +90,7 @@ public static class TabzHazeContextData
 
     public static Settings Evaluate(ZoneKind zone, float normalizedTime)
     {
-        normalizedTime = Mathf.Repeat(normalizedTime, 1f);
+        normalizedTime = Mathf.Clamp01(normalizedTime);
 
         Color generalDay = new Color(0.6911765f, 0.93610543f, 1f, 1f);
         Color generalWarm = new Color(1f, 0.7380324f, 0.53676474f, 1f);
@@ -152,35 +152,29 @@ public static class TabzHazeContextData
         return result;
     }
 
-    private static float EvaluateWarmCurve(float t)
-    {
-        AnimationCurve curve = new AnimationCurve(
-            new Keyframe(0f, 0f, 14.749998f, 14.749998f),
-            new Keyframe(0.15f, 1f, 0f, 0f),
-            new Keyframe(0.35f, 0f, -0.024193546f, -0.024193546f),
-            new Keyframe(1f, 0f, 0.016614795f, 0.016614795f));
-        return curve.Evaluate(t);
-    }
+    // Curves are cached once; rebuilding AnimationCurves every refresh would
+    // create avoidable garbage on low-memory Android devices.
+    private static readonly AnimationCurve WarmCurve = new AnimationCurve(
+        new Keyframe(0f, 0f, 14.749998f, 14.749998f),
+        new Keyframe(0.15f, 1f, 0f, 0f),
+        new Keyframe(0.35f, 0f, 0f, -0.024193546f),
+        new Keyframe(1f, 0f, 0f, 0.016614795f));
 
-    private static float EvaluateSunsetCurve(float t)
-    {
-        AnimationCurve curve = new AnimationCurve(
-            new Keyframe(0f, 0.012499999f, 0f, 0f),
-            new Keyframe(0.65000004f, 0f, 0f, -0.02970297f),
-            new Keyframe(0.8666687f, 0.97500074f, 0f, 0f),
-            new Keyframe(1f, 0f, 0f, -8.399995f));
-        return curve.Evaluate(t);
-    }
+    private static readonly AnimationCurve SunsetCurve = new AnimationCurve(
+        new Keyframe(0f, 0.012499999f, 0f, 0f),
+        new Keyframe(0.65000004f, 0f, 0f, -0.02970297f),
+        new Keyframe(0.8666687f, 0.97500074f, 0f, 0f),
+        new Keyframe(1f, 0f, 0f, -8.399995f));
 
-    private static float EvaluateNightCurve(float t)
-    {
-        AnimationCurve curve = new AnimationCurve(
-            new Keyframe(0f, 1f, 0f, 0.02848094f),
-            new Keyframe(0.1f, 0f, 0f, 0f),
-            new Keyframe(0.90000004f, 0.0000011436641f, 0f, -0.0000035189667f),
-            new Keyframe(1f, 1f, 0f, 0f));
-        return curve.Evaluate(t);
-    }
+    private static readonly AnimationCurve NightCurve = new AnimationCurve(
+        new Keyframe(0f, 1f, 0f, 0.02848094f),
+        new Keyframe(0.1f, 0f, 0f, 0f),
+        new Keyframe(0.90000004f, 0.0000011436641f, 0f, -0.0000035189667f),
+        new Keyframe(1f, 1f, 0f, 0f));
+
+    private static float EvaluateWarmCurve(float t) { return WarmCurve.Evaluate(t); }
+    private static float EvaluateSunsetCurve(float t) { return SunsetCurve.Evaluate(t); }
+    private static float EvaluateNightCurve(float t) { return NightCurve.Evaluate(t); }
 }
 
 /// <summary>
