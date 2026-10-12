@@ -239,11 +239,20 @@ jobs:
                               continue
                           variants = stage["variants"]
                           print(f"  {stage_name}: {len(variants)} serialized variants")
-                          raw_stage = vertex if stage_name == "vertex" else fragment
-                          raw_common = getattr(raw_stage, "m_CommonParameters", None) if raw_stage is not None else None
-                          print("  stage object type/keys:", type(raw_stage).__name__, list(vars(raw_stage).keys())[:80] if hasattr(raw_stage, "__dict__") else [])
-                          print("  common object type/keys:", type(raw_common).__name__ if raw_common is not None else None, list(vars(raw_common).keys())[:80] if raw_common is not None and hasattr(raw_common, "__dict__") else [])
-                          print("  common raw:", json.dumps(plain(raw_common), default=str)[:4000])
+                          seen_layouts = set()
+                          for v in variants:
+                              layout = v.get("parameter_layout", {})
+                              if not any(layout.get(k) for k in ("constant_buffer_bindings", "constant_buffers", "m_TextureParams", "m_Samplers", "m_BufferParams", "m_UAVParams")):
+                                  continue
+                              signature = json.dumps(layout, sort_keys=True, default=str)
+                              if signature in seen_layouts:
+                                  continue
+                              seen_layouts.add(signature)
+                              print("  subprogram layout:", json.dumps({
+                                  "blob_index": v.get("m_BlobIndex"),
+                                  "gpu_type": v.get("m_GpuProgramType"),
+                                  "layout": layout
+                              }, default=str)[:10000])
                           for v in variants:
                               print("   ", json.dumps({k:v.get(k) for k in ("subprogram_index","m_BlobIndex","m_GpuProgramType","m_ShaderHardwareTier","m_Keywords","m_ShaderRequirements") if k in v}, default=str))
                           if stage["common_parameters"]:
