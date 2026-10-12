@@ -147,6 +147,9 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         GameObject canvasObject = new GameObject("TABZ Prototype HUD");
         canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        // Keep the prototype menu above the separate mobile-controls canvas.
+        // Its transparent look area otherwise intercepts taps on this HUD.
+        canvas.sortingOrder = 10;
         canvasObject.AddComponent<GraphicRaycaster>();
         CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -220,7 +223,7 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
     private string GetFogProfileName()
     {
         if (fogProfile == 0) return "Baixa";
-        if (fogProfile == 1) return "Original";
+        if (fogProfile == 1) return "Média";
         return "Alta";
     }
 
