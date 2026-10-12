@@ -70,7 +70,7 @@ The original C# source shows the exact named Unity globals populated from each b
 
 For exponential height falloff, the three initial-density factors are calculated at the camera's world height:
 
-`exp(-airFalloff * abs(cameraY)`, `exp(-hazeFalloff * abs(cameraY)`, and `exp(-fogFalloff * abs(cameraY)`.
+``exp(-airFalloff * abs(cameraY))`, `exp(-hazeFalloff * abs(cameraY))`, and `exp(-fogFalloff * abs(cameraY))`.
 
 When height falloff is disabled, all three factors are 1.
 
@@ -119,7 +119,7 @@ The original `DS_HazeView` defaults include:
 
 Those are the original PC effect defaults, not recommended Android defaults. For the low-end Android baseline, temporal history, directional shafts and local volumetric lights are candidates to omit or make optional. The base fog still needs depth-aware distance integration and the original context/light-colour behavior; replacing it with a uniform grey overlay is not equivalent.
 
-## 7. What is and is not mapped
+## 7. Original platform requirements\n\nThe original `DS_HazeView.CheckHasSystemSupport` disables the effect when image effects or render textures are unavailable, when shader model 3.0 is unavailable, or when `RFloat` render textures are unsupported. HDR cameras additionally require `ARGBHalf`. Forward rendering with MSAA is rejected because the effect uses floating-point render targets. This is another reason not to assume the original PC component can simply be enabled unchanged on every Android device.\n\n## 8. What is and is not mapped
 
 **Mapped:** original C# context fields to named Unity shader globals; pass order; DX11 vertex/pixel pairing; pass responsibilities; temporal/depth texture flow.
 
