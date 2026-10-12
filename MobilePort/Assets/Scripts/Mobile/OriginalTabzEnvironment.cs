@@ -6,20 +6,12 @@ using UnityEngine;
 /// values are preserved. AssetRipper exported the original gradient shader
 /// as a white dummy, so the gradient shader in this project is reconstructed
 /// from the material's exposed properties.
-/// The original DeepSky Haze image-effect shader was not present in the export;
-/// exponential fog is therefore a lightweight mobile fallback using the
-/// original MyDay extinction coefficient and fog ambient colour.
+/// The original DeepSky Haze shader was not present in the export. A separate
+/// MobileDistanceFog camera effect supplies a mobile visual approximation.
 /// </summary>
 public class OriginalTabzEnvironment : MonoBehaviour
 {
     private const string SkyboxResourcePath = "Environment/sunnyDay";
-
-    // Original TABZ MyDay context: m_FogExtinctionScale = 5.
-    // DS_HazeView scales that value by 0.01 before passing it to the haze shader.
-    private const float OriginalFogExtinction = 5f * 0.01f;
-
-    private static readonly Color OriginalFogAmbient =
-        new Color(0.6911765f, 0.93610543f, 1f, 1f);
 
     private void Awake()
     {
@@ -39,7 +31,9 @@ public class OriginalTabzEnvironment : MonoBehaviour
         RenderSettings.ambientGroundColor = new Color(0.047f, 0.043f, 0.035f, 1f);
         RenderSettings.ambientIntensity = 1f;
 
-        // The prototype uses MobileDistanceFog on the camera. Disable Unity's\n        // built-in fog here so the two effects do not stack or mask each other.\n        RenderSettings.fog = false;
+        // The prototype uses MobileDistanceFog on the camera. Disable Unity's
+        // built-in fog so the two effects do not stack.
+        RenderSettings.fog = false;
 
         DynamicGI.UpdateEnvironment();
     }
