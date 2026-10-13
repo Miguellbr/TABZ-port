@@ -180,6 +180,23 @@ for token in ("UpdateOriginalViewportRays", "targetCamera.fieldOfView", "targetC
     if token not in camera_source:
         errors.append(f"MobileDistanceFog.cs: missing original viewport-ray contract {token!r}")
 
+# The reconstructed gradient skybox must follow the recovered DXBC data flow.
+skybox_shader = ROOT / "MobilePort" / "Assets" / "Resources" / "Environment" / "Skybox_Gradient Skybox.shader"
+if not skybox_shader.is_file():
+    errors.append("Missing reconstructed original gradient skybox shader")
+else:
+    source = skybox_shader.read_text(encoding="utf-8")
+    for token in ("float3 direction : TEXCOORD0", "o.direction = v.direction", "normalize(i.direction)", "dot(direction, _UpVector.xyz)", "pow(height, _Exponent)", "lerp(_Color2, _Color1, gradient)", "sky *= _Intensity"):
+        if token not in source:
+            errors.append(f"Skybox_Gradient Skybox.shader: missing recovered DXBC behavior {token!r}")
+    for forbidden in ("_UpVectorPitch", "_UpVectorYaw", "normalize(_UpVector.xyz)", "saturate(dot("):
+        if forbidden in source:
+            errors.append(f"Skybox_Gradient Skybox.shader: non-original gradient operation {forbidden!r} remains")
+
+environment_source = (BASE / "OriginalTabzEnvironment.cs").read_text(encoding="utf-8")
+if "AmbientMode.Skybox" not in environment_source:
+    errors.append("OriginalTabzEnvironment.cs: original TABZ_World skybox ambient mode is not applied")
+
 if errors:
     print("\n".join("ERROR: " + e for e in errors))
     sys.exit(1)
