@@ -129,6 +129,9 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         light.type = LightType.Directional;
         light.intensity = 1.15f;
         lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+        // MobileDistanceFog reads the directional light through RenderSettings.sun.
+        // Without this assignment, its atmospheric scattering receives black light.
+        RenderSettings.sun = light;
 
         gameObject.AddComponent<OriginalTabzEnvironment>();
         BuildOriginalHazeZones();
