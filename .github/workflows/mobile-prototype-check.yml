@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "MobilePort/Assets/Scripts/Mobile/**"
+      - "MobilePort/Assets/Resources/Environment/**"
       - "tools/check_mobile_prototype.py"
       - ".github/workflows/mobile-prototype-check.yml"
   pull_request:
