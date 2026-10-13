@@ -49,12 +49,22 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                     return fixed4(depthGray, depthGray, depthGray, 1.0);
                 }
 
-                // DS_HazeView converts the serialized extinction value to
-                // shader units with * 0.01 before assigning _DS_BetaParams.w.
-                // The original controller also derives the initial fog
-                // density from exp(-heightFalloff * abs(cameraWorldY)).
+                // Reconstruct the camera ray once and use its world-space
+                // length for both extinction and scattering. LinearEyeDepth
+                // is camera-space Z depth, not the travelled distance away
+                // from the optical axis.
+                float3 viewRay = mul(unity_CameraInvProjection,
+                    float4(i.uv * 2.0 - 1.0, 1.0, 1.0)).xyz;
+                viewRay /= max(-viewRay.z, 0.00001);
+                float3 worldRay = normalize(
+                    mul((float3x3)unity_CameraToWorld, viewRay));
+                float rayLength = eyeDepth * length(viewRay);
+
+                // Keep the current constant-height extinction approximation
+                // for now; the DXBC composite integrates vertical density
+                // along the ray, which is being reconstructed separately.
                 float heightDensity = exp(-max(_FogHeightFalloff, 0.0) * abs(_CameraHeight));
-                float pathLength = max(eyeDepth - _FogStartDistance, 0.0);
+                float pathLength = max(rayLength - _FogStartDistance, 0.0);
                 float opticalDepth = max(_FogExtinction, 0.0) * pathLength * heightDensity;
                 float transmittance = exp(-opticalDepth);
                 float fogAmount = saturate(_FogOpacity * (1.0 - transmittance));
@@ -67,12 +77,6 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                 if (_ScatteringEnabled > 0.5 && _HazeScattering > 0.0 &&
                     _HazeSecondaryRatio > 0.0)
                 {
-                    float3 viewRay = mul(unity_CameraInvProjection,
-                        float4(i.uv * 2.0 - 1.0, 1.0, 1.0)).xyz;
-                    viewRay /= max(-viewRay.z, 0.00001);
-                    float3 worldRay = normalize(
-                        mul((float3x3)unity_CameraToWorld, viewRay));
-                    float rayLength = eyeDepth * length(viewRay);
                     float segmentLength = max(rayLength - _FogStartDistance, 0.0);
                     float stepLength = segmentLength * 0.125;
                     float g = clamp(_HazeDirection, -0.99, 0.99);
