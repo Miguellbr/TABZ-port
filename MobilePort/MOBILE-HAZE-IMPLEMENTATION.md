@@ -34,7 +34,7 @@ This file records what is currently wired into MobilePort after recovering the o
 
 ## Validation still required
 
-The GitHub source-contract check is not a Unity compilation or an Android-device test. Unity compilation and visual validation on the Android device are still required. Scattering is disabled by default (`scatteringEnabled = false`) until its brightness, direction and frame cost are checked on-device. Enable it on the `MobileDistanceFog` component for the A/B test; `intensityMultiplier = 0` bypasses both effects. The first visual test should establish whether the geometry fog's extinction response is visually close to TABZ without desaturating the weapon or nearby ground. If it is not, adjust only after comparing a reproducible in-game test; do not restore arbitrary distance presets.
+The GitHub source-contract check is not a Unity compilation or an Android-device test. Unity compilation and visual validation on the Android device are still required. Scattering is disabled by default (`scatteringEnabled = false`) until its brightness, direction and frame cost are checked on-device. Toggle it from **DESEMPENHO → ESPALHAMENTO DIRECIONAL: LIGAR / DESLIGAR** for the A/B test; `intensityMultiplier = 0` bypasses both effects. The first visual test should establish whether the geometry fog's extinction response is visually close to TABZ without desaturating the weapon or nearby ground. If it is not, adjust only after comparing a reproducible in-game test; do not restore arbitrary distance presets.
 
 ## Source record
 
