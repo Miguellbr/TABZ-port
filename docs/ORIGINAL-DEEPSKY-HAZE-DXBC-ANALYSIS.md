@@ -103,3 +103,43 @@ Do not enable a partial multi-pass effect by default until every required render
 ## 7. Platform caveat
 
 The recovered programs are DX11 shader-model 4.0 variants. They expose the algorithm and parameter contract, but they are not directly usable as Android GLES/Vulkan shader binaries. The Android implementation must be re-authored for the Unity mobile graphics backends and validated on the target device. The decompiled HLSL is a reference for behavior, not a drop-in mobile shader.
+
+
+## 8. Directional radiance generation — pass 0 pixel program
+
+The pass-0 pairing in the serialized shader map is DX11 vertex program 0 plus pixel program 1. I reopened the extracted program-1-kShaderGpuProgramDX11PixelSM40.hlsl from the workflow artifact and inspected its texture/register usage. This fills in the most important missing stage before the main composite.
+
+### Inputs and output
+
+- t0: _SamplingOffsets, sampled using the interpolated screen coordinate. This supplies the per-pixel interleaved sampling offset.
+- t1: _CameraDepthTexture, sampled at the screen UV to reconstruct the camera-ray endpoint in world space.
+- t2: _ShadowCascades, accessed with a comparison sampler (SampleCmpLevelZero).
+- b2: Unity shadow cascade data: four cascade sphere centers (cb2[0..3]), their squared radii (cb2[4]), and the world-to-shadow transforms (cb2[8..23]).
+- b1: camera position and Z-buffer parameters used to reconstruct the view-space distance and world-space ray.
+- b0: haze scattering parameters, light direction and light colour. The shader uses _DS_BetaParams.x, _DS_BetaParams.y, _DS_AirHazeParams.y/.w, _DS_LightDirection and _DS_LightColour.
+- Output: SV_Target0 is RGB directional radiance; alpha is explicitly zero. This pass contributes radiance, it does not composite the final camera image.
+
+### Work performed per pixel
+
+1. Read the scene depth and reconstruct the world-space ray segment from the camera to the visible surface.
+2. Use the camera's position and the world-space sample position to determine which of the four shadow cascades contains each sample. The shader tests squared distance against the four cascade radii and chooses the matching world-to-shadow transform.
+3. March along the ray in regular 1/16 segment increments. The DXBC-derived HLSL contains 15 SampleCmpLevelZero calls against the cascaded shadow texture. Samples outside all four cascade spheres are treated as unshadowed rather than indexing an invalid cascade.
+4. At each sample, evaluate the exponential height-density term exp(-hazeHeightFalloff * worldY) (the compiled form uses exp2(x * log2(e))), multiply by the shadow comparison result, and accumulate it along the ray.
+5. Apply the haze scattering phase term. The code exposes the Henyey–Greenstein-like denominator through _DS_AirHazeParams.w and the light/view direction dot product. It multiplies the accumulated integral by _DS_BetaParams.x and _DS_BetaParams.y, then scales the result by _DS_LightColour.
+
+The vertex program constructs the world-space ray from _ViewportCorner, _ViewportRight, and _ViewportUp, and also forwards screen coordinates for the depth and sampling-offset lookups. These vectors are populated by DS_HazeView from the camera's transform, field of view, aspect ratio and far clip distance.
+
+### Consequence for the Android implementation
+
+The original directional radiance is shadow-aware volumetric integration, not simply a sun-coloured gradient or a radial blur. Reproducing it faithfully requires access to the active directional light's shadow map/cascade data and a compatible comparison-sampling path. Unity's ordinary mobile Light API does not expose the built-in shadow-cascade atlas and matrices to an arbitrary OnRenderImage effect as a stable cross-backend contract.
+
+Therefore, do not implement this pass by inventing shadow matrices or by sampling an unrelated screen-space shadow texture. The safe next options are:
+
+- use a dedicated render feature/custom shadow-caster path that owns its shadow texture and matrices (more work, but controllable); or
+- start with a deliberately reduced non-shadowed radiance approximation, clearly labelled as such, and compare it visually before investing in cascade parity.
+
+For the low-end Android target, the second option is the more practical first experiment. It must remain optional and should not replace the current safe fog fallback until the radiance buffer, depth inputs and composite are all valid. This is a design decision, not an implemented or device-tested change.
+
+## 9. Evidence and limits
+
+The directional-pass observations above come from decompiler output for the DX11 SM4.0 pixel program paired with the original serialized pass table. They establish the texture bindings, cascade selection, repeated shadow comparisons and scattering accumulation, but they do not provide the original authored HLSL or guarantee identical behavior on GLES/Vulkan. In particular, the exact GPU cost on the target Android device still needs measurement.
