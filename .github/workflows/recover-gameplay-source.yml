@@ -60,6 +60,31 @@ jobs:
             mkdir -p "source-recovery/$version"
             "$HOME/.dotnet/tools/ilspycmd" -o "source-recovery/$version" "$dll"
           done
+      - name: Extract original weapon and rig source for direct comparison
+        run: |
+          python - <<'PY'
+          import pathlib
+          root = pathlib.Path("source-recovery")
+          names = ("WeaponHandler.cs", "Weapon.cs", "JointAnimation.cs",
+                   "JointAnimationExtended.cs", "ReloadAimTag.cs",
+                   "WeaponRightHandTag.cs", "WeaponLeftHandTag.cs")
+          output = ["# Original TABZ weapon / rig source", "",
+                    "Full ILSpy output for the recovered weapon and hand-rig classes.",
+                    "Use this as the source of truth before changing the mobile reconstruction.", ""]
+          found = 0
+          for version in sorted(root.iterdir()):
+              if not version.is_dir():
+                  continue
+              for name in names:
+                  for file in version.rglob(name):
+                      found += 1
+                      output += [f"## {version.name}/{file.relative_to(version).as_posix()}", "",
+                                 "~~~csharp", file.read_text(errors="replace"), "~~~", ""]
+          if not found:
+              raise SystemExit("No weapon/rig source classes were decompiled.")
+          pathlib.Path("source-recovery/WEAPON-RIG-SOURCE.md").write_text("\n".join(output))
+          print(f"Collected {found} original weapon/rig source files.")
+          PY
       - name: Generate mobile-port entry point report
         run: |
           python - <<'PY'
