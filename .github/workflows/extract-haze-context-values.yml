@@ -100,6 +100,11 @@ jobs:
           for i, item in enumerate(object_hits, 1):
               lines += [f"## Serialized object {i}: {item['path']}", "", f"Matched: {', '.join(item['matched'])}", "", "```yaml", item["block"], "```", ""]
           (out / "HAZE-CONTEXT-VALUES.md").write_text("\n".join(lines), encoding="utf-8")
+          sky_lines = ["# Original TABZ skybox and ambient render settings", "", f"- Files scanned: {len(files)}", f"- Matching serialized material/scene blocks: {len(skybox_hits)}", "", "Raw AssetRipper-exported v5.1 serialized values. Shader implementation is audited separately from fog.", ""]
+          for i, item in enumerate(skybox_hits, 1):
+              sky_lines += [f"## Serialized object {i}: {item['path']}", "", f"Matched: {', '.join(item['matched'])}", "", "~~~yaml", item["block"], "~~~", ""]
+          (out / "SKYBOX-AUDIT.md").write_text("\n".join(sky_lines), encoding="utf-8")
+          (out / "skybox-audit.json").write_text(json.dumps({"serialized_hits": skybox_hits}, indent=2), encoding="utf-8")
           print(f"FILES_SCANNED={len(files)}")
           print(f"SCRIPTS_FOUND={len(script_hits)}")
           print(f"OBJECT_BLOCKS_FOUND={len(object_hits)}")
