@@ -26,9 +26,33 @@ Shader "Hidden/TABZ/MobileDistanceFog"
             float _HazeHeightFalloff;
             float _HazeDirection;
             float _HazeSecondaryRatio;
+            float _AirScatteringScale;
+            float _AirHeightFalloff;
+            float _FogScatteringScale;
+            float _FogScatteringDirection;
             float _ScatteringEnabled;
             float3 _LightDirection;
             float3 _LightColour;
+
+            // Stable integral of rho(y)=rhoStart*exp(-k*deltaY)
+            // over a straight ray segment of length L.
+            float IntegrateExponentialDensity(float densityAtStart, float falloff,
+                float verticalDelta, float segmentLength)
+            {
+                if (segmentLength <= 0.0) return 0.0;
+                float x = max(falloff, 0.0) * verticalDelta;
+                if (abs(x) < 0.0001)
+                    return densityAtStart * segmentLength;
+                return densityAtStart * segmentLength * (1.0 - exp(-x)) / x;
+            }
+
+            float PhaseFunction(float anisotropy, float cosine)
+            {
+                float g = clamp(anisotropy, -0.99, 0.99);
+                float denominator = max(1.0 - g * cosine, 0.0001);
+                return (1.0 - g * g) /
+                    (denominator * denominator) * 0.0795774683;
+            }
 
             fixed4 frag(v2f_img i) : SV_Target
             {
@@ -49,63 +73,87 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                     return fixed4(depthGray, depthGray, depthGray, 1.0);
                 }
 
-                // Reconstruct the camera ray once and use its world-space
-                // length for both extinction and scattering. LinearEyeDepth
-                // is camera-space Z depth, not the travelled distance away
-                // from the optical axis.
+                // Unity's inverse projection yields a view ray whose Z is
+                // normalized to -1. Multiplying by eye depth therefore gives
+                // the camera-to-surface segment in view/world units.
                 float3 viewRay = mul(unity_CameraInvProjection,
                     float4(i.uv * 2.0 - 1.0, 1.0, 1.0)).xyz;
                 viewRay /= max(-viewRay.z, 0.00001);
                 float3 worldRay = normalize(
                     mul((float3x3)unity_CameraToWorld, viewRay));
                 float rayLength = eyeDepth * length(viewRay);
+                float segmentLength = max(rayLength - _FogStartDistance, 0.0);
+                float startDistance = min(_FogStartDistance, rayLength);
+                float3 cameraPosition = _WorldSpaceCameraPos;
+                float cameraHeight = cameraPosition.y;
+                float verticalDelta = worldRay.y * segmentLength;
+                float sampleStartHeight = cameraHeight + worldRay.y * startDistance;
 
-                // Keep the current constant-height extinction approximation
-                // for now; the DXBC composite integrates vertical density
-                // along the ray, which is being reconstructed separately.
-                float heightDensity = exp(-max(_FogHeightFalloff, 0.0) * abs(_CameraHeight));
-                float pathLength = max(rayLength - _FogStartDistance, 0.0);
-                float opticalDepth = max(_FogExtinction, 0.0) * pathLength * heightDensity;
+                // The original controller supplies initial density at the
+                // camera height as exp(-falloff*abs(cameraY)). Advance that
+                // density to the fog-start point, then integrate it exactly
+                // over the remaining straight ray segment.
+                float fogStartDensity = exp(-max(_FogHeightFalloff, 0.0) *
+                    abs(cameraHeight)) * exp(-max(_FogHeightFalloff, 0.0) *
+                    worldRay.y * startDistance);
+                float fogDensityIntegral = IntegrateExponentialDensity(
+                    fogStartDensity, _FogHeightFalloff, verticalDelta, segmentLength);
+                float opticalDepth = max(_FogExtinction, 0.0) * fogDensityIntegral;
                 float transmittance = exp(-opticalDepth);
                 float fogAmount = saturate(_FogOpacity * (1.0 - transmittance));
 
-                // Reduced unshadowed directional haze: the original DX11
-                // pass uses 15 ray steps with cascaded shadow comparisons.
-                // This mobile path keeps the recovered phase and height law,
-                // but uses 8 midpoint samples and has no cascade visibility.
-                float3 hazeRadiance = 0.0;
-                if (_ScatteringEnabled > 0.5 && _HazeScattering > 0.0 &&
-                    _HazeSecondaryRatio > 0.0)
+                float3 atmosphereRadiance = 0.0;
+                if (_ScatteringEnabled > 0.5 && segmentLength > 0.0)
                 {
-                    float segmentLength = max(rayLength - _FogStartDistance, 0.0);
-                    float stepLength = segmentLength * 0.125;
-                    float g = clamp(_HazeDirection, -0.99, 0.99);
                     float cosine = dot(normalize(_LightDirection), worldRay);
-                    float phaseDenominator = max(1.0 - g * cosine, 0.0001);
-                    float phase = (1.0 - g * g) /
-                        (phaseDenominator * phaseDenominator) * 0.0795774683;
-                    float densityIntegral = 0.0;
 
-                    [unroll]
-                    for (int sampleIndex = 0; sampleIndex < 8; sampleIndex++)
-                    {
-                        float sampleDistance = _FogStartDistance + (sampleIndex + 0.5) * stepLength;
-                        float sampleHeight = _WorldSpaceCameraPos.y +
-                            worldRay.y * sampleDistance;
-                        float sampleDensity = exp(-_HazeHeightFalloff * sampleHeight);
-                        densityIntegral += sampleDensity * stepLength;
-                    }
+                    // Air/Rayleigh is a separate RGB contribution in the
+                    // original composite; it does not use the haze beta.
+                    float airStartDensity = exp(-max(_AirHeightFalloff, 0.0) *
+                        abs(cameraHeight)) * exp(-max(_AirHeightFalloff, 0.0) *
+                        worldRay.y * startDistance);
+                    float airIntegral = IntegrateExponentialDensity(
+                        airStartDensity, _AirHeightFalloff, verticalDelta, segmentLength);
+                    float3 rayleighBeta = float3(0.00116, 0.0027, 0.00662) *
+                        max(_AirScatteringScale, 0.0);
+                    atmosphereRadiance += _LightColour * rayleighBeta *
+                        (airIntegral * 0.0795774683);
 
-                    hazeRadiance = _LightColour * (phase * _HazeScattering *
-                        _HazeSecondaryRatio * densityIntegral);
+                    // The main composite's local haze term uses (1-ratio).
+                    // The complementary ratio belongs to the separate,
+                    // shadow-cascade directional-radiance pass, not this
+                    // unshadowed approximation.
+                    float hazeStartDensity = exp(-max(_HazeHeightFalloff, 0.0) *
+                        abs(cameraHeight)) * exp(-max(_HazeHeightFalloff, 0.0) *
+                        worldRay.y * startDistance);
+                    float hazeIntegral = IntegrateExponentialDensity(
+                        hazeStartDensity, _HazeHeightFalloff, verticalDelta, segmentLength);
+                    float hazePhase = PhaseFunction(_HazeDirection, cosine);
+                    atmosphereRadiance += _LightColour * (hazePhase *
+                        max(_HazeScattering, 0.0) *
+                        (1.0 - saturate(_HazeSecondaryRatio)) * hazeIntegral);
+
+                    // Fog scattering is independent from fog extinction and
+                    // has its own anisotropy. Gameplay zones currently set
+                    // its scale to zero, but the channel remains represented.
+                    float fogStartScatteringDensity = fogStartDensity;
+                    float fogScatteringIntegral = IntegrateExponentialDensity(
+                        fogStartScatteringDensity, _FogHeightFalloff,
+                        verticalDelta, segmentLength);
+                    float fogPhase = PhaseFunction(_FogScatteringDirection, cosine);
+                    atmosphereRadiance += _LightColour * (fogPhase *
+                        max(_FogScatteringScale, 0.0) * _FogOpacity *
+                        fogScatteringIntegral);
                 }
 
-                // The original DeepSky view has a separate skybox integration
-                // path. Keep sky pixels untouched in this low-cost geometry
-                // pass rather than applying a screen-wide colour wash.
-                fogAmount *= (1.0 - isSky);
+                // This pass still lacks the original shadowed radiance target,
+                // bilateral filtering and exact fog ambient/direct composition.
+                // Keep the known extinction and unshadowed scattering terms
+                // isolated from sky pixels.
+                float geometryMask = 1.0 - isSky;
+                fogAmount *= geometryMask;
                 scene.rgb = lerp(scene.rgb, _FogColor.rgb, fogAmount);
-                scene.rgb += hazeRadiance * (1.0 - isSky);
+                scene.rgb += atmosphereRadiance * geometryMask;
                 return scene;
             }
             ENDCG
