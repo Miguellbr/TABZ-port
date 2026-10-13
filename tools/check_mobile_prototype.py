@@ -124,7 +124,7 @@ if not haze_shader.is_file():
     errors.append("Missing mobile haze shader")
 else:
     shader_source = haze_shader.read_text(encoding="utf-8")
-    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)", "_HazeScattering", "_HazeHeightFalloff", "_HazeDirection", "_HazeSecondaryRatio", "_AirScatteringScale", "_AirHeightFalloff", "_FogScatteringScale", "_FogScatteringDirection", "_ScatteringEnabled", "_LightDirection", "_LightColour", "unity_CameraInvProjection", "IntegrateExponentialDensity", "fogDensityIntegral", "airIntegral", "hazeIntegral", "atmosphereRadiance", "(1.0 - saturate(_HazeSecondaryRatio))"):
+    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)", "_HazeScattering", "_HazeHeightFalloff", "_HazeDirection", "_HazeSecondaryRatio", "_AirScatteringScale", "_AirHeightFalloff", "_FogScatteringScale", "_FogScatteringDirection", "_ScatteringEnabled", "_LightDirection", "_LightColour", "_ViewportCorner", "_ViewportRight", "_ViewportUp", "_ViewportFarClip", "_MainTex_TexelSize.y < 0.0", "IntegrateExponentialDensity", "fogDensityIntegral", "airIntegral", "hazeIntegral", "atmosphereRadiance", "(1.0 - saturate(_HazeSecondaryRatio))"):
         if token not in shader_source:
             errors.append(f"MobileDistanceFog.shader: missing expected token {token!r}")
     for forbidden in ("_FogEnd", "_SkyFogStrength"):
@@ -173,6 +173,12 @@ else:
     for token in ("workflow_dispatch:", "game-ci/unity-builder@v4", "TABZMobileBuild.BuildAndroid", "UNITY_LICENSE"):
         if token not in workflow_source:
             errors.append(f"android-prototype-build.yml: missing expected token {token!r}")
+
+# The camera ray basis must reproduce the recovered original DS_HazeView formula.
+camera_source = (BASE / "MobileDistanceFog.cs").read_text(encoding="utf-8")
+for token in ("UpdateOriginalViewportRays", "targetCamera.fieldOfView", "targetCamera.aspect", "targetCamera.farClipPlane", '"_ViewportCorner"', '"_ViewportRight"', '"_ViewportUp"', '"_ViewportFarClip"', "cameraTransform.forward", "cameraTransform.right", "cameraTransform.up"):
+    if token not in camera_source:
+        errors.append(f"MobileDistanceFog.cs: missing original viewport-ray contract {token!r}")
 
 if errors:
     print("\n".join("ERROR: " + e for e in errors))
