@@ -22,6 +22,10 @@ Shader "Hidden/TABZ/MobileDistanceFog"
             float _FogStartDistance;
             float _CameraHeight;
             float _DebugDepth;
+            float3 _ViewportCorner;
+            float3 _ViewportRight;
+            float3 _ViewportUp;
+            float _ViewportFarClip;
             float _HazeScattering;
             float _HazeHeightFalloff;
             float _HazeDirection;
@@ -73,14 +77,17 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                     return float4(depthGray, depthGray, depthGray, 1.0);
                 }
 
-                // Unity's inverse projection yields a view ray whose Z is
-                // normalized to -1. Multiplying by eye depth therefore gives
-                // the camera-to-surface segment in view/world units.
-                float3 viewRay = mul(unity_CameraInvProjection,
-                    float4(i.uv * 2.0 - 1.0, 1.0, 1.0)).xyz;
-                viewRay /= max(-viewRay.z, 0.00001);
-                float3 worldRay = normalize(
-                    mul((float3x3)unity_CameraToWorld, viewRay));
+                // Match the original DS_HazeView vertex shader:
+                // corner + right*u + up*v, including its render-texture Y flip.
+                float rayV = (_MainTex_TexelSize.y < 0.0)
+                    ? (1.0 - i.uv.y) : i.uv.y;
+                float3 viewportRay = _ViewportCorner +
+                    _ViewportRight * i.uv.x + _ViewportUp * rayV;
+                float3 viewRay = viewportRay /
+                    max(_ViewportFarClip, 0.00001);
+                float3 worldRay = normalize(viewportRay);
+                // Original v3 is far-clip sized and is multiplied by
+                // Linear01Depth; this is equivalent to eyeDepth * viewRay.
                 float rayLength = eyeDepth * length(viewRay);
                 float segmentLength = max(rayLength - _FogStartDistance, 0.0);
                 float startDistance = min(_FogStartDistance, rayLength);
