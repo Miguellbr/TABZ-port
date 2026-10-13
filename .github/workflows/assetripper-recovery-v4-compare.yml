@@ -1,0 +1,152 @@
+name: Recover TABZ v4 for haze comparison
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/assetripper-recovery-v4-compare.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover-and-compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install archive tools
+        run: python -m pip install --upgrade gdown py7zr
+      - name: Download and select original v4 archive
+        run: |
+          mkdir -p downloads extracted output
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, shutil
+          files = [p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"} and p.name.lower() not in {"source.zip", "source.7z"}]
+          selected = [p for p in files if "v4" in p.name.lower()]
+          if len(selected) != 1:
+              raise SystemExit("Could not uniquely select v4 archive. Archives found: " + ", ".join(str(p) for p in files))
+          target = pathlib.Path("downloads") / ("source" + selected[0].suffix.lower())
+          if selected[0].resolve() != target.resolve():
+              shutil.copy2(selected[0], target)
+          print("Selected:", selected[0].name, "bytes:", selected[0].stat().st_size)
+          PY
+      - name: Extract original archive safely
+        run: |
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archive = next(pathlib.Path("downloads").glob("source.*"))
+          dest = pathlib.Path("extracted/game")
+          dest.mkdir(parents=True, exist_ok=True)
+          if archive.suffix.lower() == ".zip":
+              with zipfile.ZipFile(archive) as z:
+                  for item in z.infolist():
+                      rel = pathlib.PurePosixPath(item.filename.replace("\\\\", "/"))
+                      if rel.is_absolute() or ".." in rel.parts:
+                          raise RuntimeError("Unsafe archive path: " + item.filename)
+                  z.extractall(dest)
+          else:
+              with py7zr.SevenZipFile(archive) as z:
+                  for name in z.getnames():
+                      rel = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                      if rel.is_absolute() or ".." in rel.parts:
+                          raise RuntimeError("Unsafe archive path: " + name)
+                  z.extractall(path=dest)
+          PY
+      - name: Locate Unity game root
+        run: |
+          python - <<'PY'
+          import pathlib
+          root = pathlib.Path("extracted/game")
+          data_dirs = [p for p in root.rglob("*_Data") if p.is_dir() and (p / "globalgamemanagers").is_file()]
+          if len(data_dirs) != 1:
+              raise SystemExit("Expected one Unity *_Data folder; found: " + ", ".join(map(str, data_dirs)))
+          game_root = data_dirs[0].parent
+          pathlib.Path("output/assetripper-input.txt").write_text(str(game_root.resolve()) + "\\n")
+          print("Unity root:", game_root)
+          print("Assembly-CSharp:", [(str(p), p.stat().st_size) for p in game_root.rglob("Assembly-CSharp.dll")])
+          PY
+      - name: Download AssetRipper CLI
+        run: |
+          curl -fL --retry 3 "https://github.com/nowl-it/AssetRipperCLI/releases/download/v1.0.1/AssetRipper_linux_x64.zip" -o /tmp/assetripper.zip
+          mkdir -p /tmp/assetripper
+          unzip -q /tmp/assetripper.zip -d /tmp/assetripper
+          BIN="$(find /tmp/assetripper -type f | grep -Ei '/(AssetRipper|AssetRipperCLI|assetripper|AssetRipper[.]GUI[.]Free)$' | head -n 1)"
+          test -n "$BIN"
+          chmod +x "$BIN"
+          echo "ASSET_RIPPER_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --help
+      - name: Reconstruct v4 Unity project
+        run: |
+          "$ASSET_RIPPER_BIN" --cli \
+            --input "$(cat "$GITHUB_WORKSPACE/output/assetripper-input.txt")" \
+            --output "$GITHUB_WORKSPACE/output/v4" \
+            --mode Unity \
+            --script-content-level Level2 \
+            --log-path "$GITHUB_WORKSPACE/output/assetripper-v4.log"
+      - name: Extract v4 haze contexts, zone links, transforms and colliders
+        run: |
+          python - <<'PY'
+          import pathlib, re, json
+          root = pathlib.Path("output/v4/ExportedProject/Assets")
+          files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".asset", ".prefab", ".unity", ".mat", ".cs"}]
+          scene_files = [p for p in files if p.suffix.lower() == ".unity" and "TABZ_World" in p.name]
+          keywords = ["DS_HazeContext", "DS_HazeContextItem", "DS_HazeZone", "m_AirScatteringScale", "m_HazeScatteringScale", "m_FogScatteringScale", "m_ZonePriority", "m_BlendRange", "MyDay", "Night", "Snow", "LightHouse", "darknes"]
+          hits, scripts, errors, scene_objects = [], [], [], []
+          for p in files:
+              try:
+                  data = p.read_text(encoding="utf-8", errors="replace")
+              except Exception as e:
+                  errors.append(f"{p}: {type(e).__name__}: {e}")
+                  continue
+              if p.suffix.lower() == ".cs" and any(x in data for x in ["class DS_HazeContext", "class DS_HazeContextItem", "class DS_HazeZone"]):
+                  scripts.append({"path":str(p.relative_to(root)), "text":data[:30000]})
+              if p.suffix.lower() not in {".asset", ".prefab", ".unity", ".mat"}:
+                  continue
+              for block in re.split(r"(?=^--- !u!)", data, flags=re.M):
+                  matched = [k for k in keywords if k.lower() in block.lower()]
+                  if matched:
+                      item = {"path":str(p.relative_to(root)), "matched":matched, "block":block[:40000]}
+                      hits.append(item)
+                      if p in scene_files:
+                          scene_objects.append(item)
+          for scene in scene_files:
+              data = scene.read_text(encoding="utf-8", errors="replace")
+              blocks = re.split(r"(?=^--- !u!)", data, flags=re.M)
+              by_id = {}
+              for b in blocks:
+                  m = re.match(r"--- !u!\\d+ &(-?\\d+)", b)
+                  if m: by_id[m.group(1)] = b
+              for b in blocks:
+                  if not any(k in b for k in ["m_ZonePriority:", "m_BlendRange:"]): continue
+                  go = re.search(r"m_GameObject:\\s*\\{fileID:\\s*(-?\\d+)\\}", b)
+                  if not go: continue
+                  go_block = by_id.get(go.group(1), "")
+                  comp_ids = re.findall(r"component:\\s*\\{fileID:\\s*(-?\\d+)\\}", go_block)
+                  related = []
+                  for cid in comp_ids:
+                      cb = by_id.get(cid, "")
+                      if cb and ("Transform" in cb[:500] or "Collider" in cb[:500] or "m_LocalPosition" in cb or "m_Center:" in cb):
+                          related.append(cb[:20000])
+                  scene_objects.append({"path":str(scene.relative_to(root)), "matched":["ZONE_LINKED_COMPONENTS"], "block":b[:20000], "game_object":go_block[:12000], "related_components":related})
+          report = {"scanned_files":len(files), "world_scenes":[str(p.relative_to(root)) for p in scene_files], "script_hits":scripts, "serialized_hits":hits, "scene_zone_links":scene_objects, "read_errors":errors}
+          out=pathlib.Path("output/v4-haze"); out.mkdir(parents=True,exist_ok=True)
+          (out/"v4-haze.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+          lines=["# Original TABZ v4 haze extraction","",f"- Files scanned: {len(files)}",f"- World scenes: {len(scene_files)}",f"- Matching serialized blocks: {len(hits)}",f"- Linked zone records: {sum(x['matched']==['ZONE_LINKED_COMPONENTS'] for x in scene_objects)}",f"- Read errors: {len(errors)}",""]
+          for x in scripts: lines += ["## Script: "+x["path"],"",x["text"],""]
+          for i,x in enumerate(scene_objects,1): lines += [f"## World scene record {i}: {x['path']}","",f"Matched: {', '.join(x['matched'])}","",x["block"],""]
+          for i,x in enumerate(hits,1): lines += [f"## Serialized record {i}: {x['path']}","",f"Matched: {', '.join(x['matched'])}","",x["block"],""]
+          (out/"V4-HAZE-EXTRACTION.md").write_text("\\n".join(lines),encoding="utf-8")
+          print("\\n".join(lines[:15]))
+          PY
+      - name: Upload v4 reconstructed project and extraction
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-assetripper-v4-haze-comparison
+          path: output/
+          if-no-files-found: warn
+          compression-level: 1
+          retention-days: 14
