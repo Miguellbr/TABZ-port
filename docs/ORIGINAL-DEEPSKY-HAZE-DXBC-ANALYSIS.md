@@ -143,3 +143,62 @@ For the low-end Android target, the second option is the more practical first ex
 ## 9. Evidence and limits
 
 The directional-pass observations above come from decompiler output for the DX11 SM4.0 pixel program paired with the original serialized pass table. They establish the texture bindings, cascade selection, repeated shadow comparisons and scattering accumulation, but they do not provide the original authored HLSL or guarantee identical behavior on GLES/Vulkan. In particular, the exact GPU cost on the target Android device still needs measurement.
+
+
+## 10. Term-by-term reconstruction of the non-temporal composite (program 36)
+
+The artifact's program-36 HLSL was re-opened and its register operations traced against the semantic mapping in `ORIGINAL-DEEPSKY-HAZE-MAP.md`. This resolves an ambiguity in the earlier high-level notes: air/Rayleigh, haze, and fog are separate contributions, with separate coefficients and phase parameters.
+
+### Reconstructed ray quantities
+
+- The full-resolution depth is linearized with `cb1[7]` (`_ZBufferParams`).
+- Four half-resolution depth candidates are linearized and compared with the full-resolution depth. The radiance sample whose depth is closest is selected.
+- The interpolated camera ray is scaled by the linear eye depth. Its world-space length is computed separately from its vertical displacement.
+- The vertical density integrals use the ray's vertical displacement and total ray length, not one constant camera-height density for the whole segment.
+
+For a density profile `rho(y) = rho0 * exp(-k * deltaY)`, the compiled integral has the stable form:
+
+`I = rho0 * L * (1 - exp(-k * deltaY)) / (k * deltaY)`
+
+with the linear limit `I = rho0 * L` when the denominator is near zero. Here `L` is the ray segment length and `deltaY` is its signed vertical displacement. The initial density `rho0` is supplied independently for air, haze, and fog by `_DS_InitialDensityParams.xyz`.
+
+### Separate air, haze, and fog terms
+
+| Term | DXBC register inputs | Reconstructed role |
+|---|---|---|
+| Air / Rayleigh | `_DS_RBetaS.rgb`, `_DS_InitialDensityParams.x`, `_DS_AirHazeParams.x` | RGB wavelength-dependent coefficient multiplied by the integrated air density; the composite applies the isotropic `1/(4π)` factor and light colour |
+| Haze | `_DS_BetaParams.x`, `_DS_BetaParams.y`, `_DS_AirHazeParams.y`, `_DS_AirHazeParams.w` | Integrated haze density, Rayleigh-like phase using the haze anisotropy, scaled by haze strength and by `(1 - secondaryRatio)` in this composite term |
+| Fog scattering | `_DS_BetaParams.z`, `_DS_FogParams.w`, `_DS_FogParams.z` | Separate phase term using fog anisotropy, scaled by fog-scattering strength and fog opacity |
+| Fog extinction | `_DS_BetaParams.w`, `_DS_FogParams.x/y/z`, `_DS_InitialDensityParams.z` | Integrated fog density after start distance, converted to transmittance; opacity controls the blend toward fog lighting |
+
+The air contribution is not controlled by `_DS_BetaParams.x`. It uses `_DS_RBetaS.rgb` directly. Conversely, `_DS_BetaParams.x` is the haze scattering scale (the C# controller supplies `hazeScale * 0.0021`). `_DS_BetaParams.y` is the secondary haze ratio; in the main composite the local haze phase term is multiplied by `(1 - y)`. The directional-radiance pass separately accumulates the primary shadowed haze contribution with `y`, so the two uses must not be collapsed into one scalar.
+
+### Phase functions and lighting composition
+
+The composite computes two phase functions from the normalized view ray and light direction:
+
+- Haze phase: `(1 - g_haze²) / (4π * (1 - g_haze * μ)²)`, where `g_haze = _DS_AirHazeParams.w`.
+- Fog phase: `(1 - g_fog²) / (4π * (1 - g_fog * μ)²)`, where `g_fog = _DS_FogParams.w`.
+
+The air/Rayleigh contribution uses the isotropic `1/(4π)` factor with the RGB `_DS_RBetaS` coefficient. The compiled composite then forms the atmospheric base from the camera colour, selected radiance-buffer sample, air contribution and haze contribution. Separately it forms fog lighting from `_DS_FogAmbientLight + _DS_FogDirectLight * fogPhase`. The integrated fog extinction determines the interpolation between those two results. This is why a single `lerp(scene, _FogColor, fogAmount)` cannot reproduce the original composite.
+
+### Directional radiance pass (program 1) versus composite
+
+The pass-0 pixel shader uses the same haze anisotropy `_DS_AirHazeParams.w`, haze scale `_DS_BetaParams.x`, and secondary ratio `_DS_BetaParams.y`, but it performs a distinct operation:
+
+1. It reconstructs the camera-to-surface ray segment.
+2. It takes 15 samples at 1/16-segment intervals (the first sample begins at the camera and the final sample remains before the endpoint).
+3. At each sample it evaluates `exp(-hazeFalloff * worldY)`, applies the selected directional-shadow-cascade comparison, and accumulates the result.
+4. It applies the haze phase and the primary/secondary scale, then outputs directional radiance to the radiance target.
+
+The main composite's haze term is therefore not a substitute for pass 0. Pass 0 creates shadow-aware directional radiance; pass 3 consumes the filtered radiance buffer and independently computes the remaining atmospheric terms.
+
+### Corrections to earlier interpretation
+
+- The earlier shorthand that described `_DS_RBetaS` as merely another haze coefficient was incorrect. It is the RGB air/Rayleigh coefficient.
+- The earlier table's implication that `_DS_BetaParams.y` is only a generic secondary ratio was incomplete: in the main composite, the haze phase term is multiplied by `(1-y)`, while pass 0 accumulates the complementary primary contribution using `y`.
+- The fog scattering term is not absent from the original pipeline: it is a distinct phase contribution in the composite. The mobile implementation currently does not calculate it.
+- The existing mobile scalar `0.0021` is correctly the conversion factor for haze scale, not a replacement for the RGB `_DS_RBetaS` vector.
+- The exact camera-ray interpolation still needs a dedicated equivalence check against the original `_ViewportCorner/_ViewportRight/_ViewportUp` construction. This section confirms the composite's use of the ray quantities, not that the current inverse-projection reconstruction is pixel-identical.
+
+No shader implementation was changed during this register-mapping investigation. The only shader change so far remains commit `1e48fbdf`, which makes extinction use the same world-space ray length already used by scattering.
