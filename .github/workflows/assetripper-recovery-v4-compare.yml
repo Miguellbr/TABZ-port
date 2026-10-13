@@ -43,14 +43,14 @@ jobs:
           if archive.suffix.lower() == ".zip":
               with zipfile.ZipFile(archive) as z:
                   for item in z.infolist():
-                      rel = pathlib.PurePosixPath(item.filename.replace("\\\\", "/"))
+                      rel = pathlib.PurePosixPath(item.filename.replace("\\", "/"))
                       if rel.is_absolute() or ".." in rel.parts:
                           raise RuntimeError("Unsafe archive path: " + item.filename)
                   z.extractall(dest)
           else:
               with py7zr.SevenZipFile(archive) as z:
                   for name in z.getnames():
-                      rel = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                      rel = pathlib.PurePosixPath(name.replace("\\", "/"))
                       if rel.is_absolute() or ".." in rel.parts:
                           raise RuntimeError("Unsafe archive path: " + name)
                   z.extractall(path=dest)
@@ -64,7 +64,7 @@ jobs:
           if len(data_dirs) != 1:
               raise SystemExit("Expected one Unity *_Data folder; found: " + ", ".join(map(str, data_dirs)))
           game_root = data_dirs[0].parent
-          pathlib.Path("output/assetripper-input.txt").write_text(str(game_root.resolve()) + "\\n")
+          pathlib.Path("output/assetripper-input.txt").write_text(str(game_root.resolve()) + "\n")
           print("Unity root:", game_root)
           print("Assembly-CSharp:", [(str(p), p.stat().st_size) for p in game_root.rglob("Assembly-CSharp.dll")])
           PY
@@ -117,14 +117,14 @@ jobs:
               blocks = re.split(r"(?=^--- !u!)", data, flags=re.M)
               by_id = {}
               for b in blocks:
-                  m = re.match(r"--- !u!\\d+ &(-?\\d+)", b)
+                  m = re.match(r"--- !u!\d+ &(-?\d+)", b)
                   if m: by_id[m.group(1)] = b
               for b in blocks:
                   if not any(k in b for k in ["m_ZonePriority:", "m_BlendRange:"]): continue
-                  go = re.search(r"m_GameObject:\\s*\\{fileID:\\s*(-?\\d+)\\}", b)
+                  go = re.search(r"m_GameObject:\s*\{fileID:\s*(-?\d+)\}", b)
                   if not go: continue
                   go_block = by_id.get(go.group(1), "")
-                  comp_ids = re.findall(r"component:\\s*\\{fileID:\\s*(-?\\d+)\\}", go_block)
+                  comp_ids = re.findall(r"component:\s*\{fileID:\s*(-?\d+)\}", go_block)
                   related = []
                   for cid in comp_ids:
                       cb = by_id.get(cid, "")
@@ -138,8 +138,8 @@ jobs:
           for x in scripts: lines += ["## Script: "+x["path"],"",x["text"],""]
           for i,x in enumerate(scene_objects,1): lines += [f"## World scene record {i}: {x['path']}","",f"Matched: {', '.join(x['matched'])}","",x["block"],""]
           for i,x in enumerate(hits,1): lines += [f"## Serialized record {i}: {x['path']}","",f"Matched: {', '.join(x['matched'])}","",x["block"],""]
-          (out/"V4-HAZE-EXTRACTION.md").write_text("\\n".join(lines),encoding="utf-8")
-          print("\\n".join(lines[:15]))
+          (out/"V4-HAZE-EXTRACTION.md").write_text("\n".join(lines),encoding="utf-8")
+          print("\n".join(lines[:15]))
           PY
       - name: Upload v4 reconstructed project and extraction
         if: always()
