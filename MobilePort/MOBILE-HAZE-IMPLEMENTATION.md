@@ -20,7 +20,8 @@ This file records what is currently wired into MobilePort after recovering the o
 
 - The offline prototype starts at normalized context time 0.5 (the daytime MyDay portion). It is not yet connected to the original DayNightCycle; the recovered original cycle duration is 3600 seconds, but the prototype has no ported day/night clock to supply its phase.
 - The original map itself is still absent. The five haze-zone transforms are present in the offline sandbox, but the map geometry is not.
-- The camera shader is a low-cost mobile reconstruction, not the original Hidden/DS_Haze multi-pass shader. It currently handles geometry extinction only; the preserved air/haze data is not yet consumed by the shader. Skybox integration, Rayleigh/Mie scattering, directional shafts, bilateral radiance blur, temporal reprojection, and local volumetric lights are not ported.
+- The camera shader has a low-cost, optional directional haze-radiance experiment in addition to geometry extinction. It consumes the recovered haze scattering scale (0.0021 conversion), height falloff, phase direction and secondary-scattering ratio, and follows `RenderSettings.sun` direction/colour each frame. It integrates density with 8 midpoint samples along the camera ray.
+- This is deliberately reduced: unlike original DX11 pass 0, it has no cascaded-shadow visibility (the original performs 15 shadow-comparison samples), interleaved sampling offsets, half-resolution radiance buffer, bilateral blur or skybox integration. It is an unshadowed directional haze approximation, not full Rayleigh/Mie parity.
 - The exponential depth integration is a mobile approximation using the recovered extinction and camera-height density factor. It is not claimed to be bit-for-bit equivalent to the original decompiled PC shader.
 
 ## Files
@@ -29,11 +30,11 @@ This file records what is currently wired into MobilePort after recovering the o
 - Assets/Scripts/Mobile/TabzHazeZone.cs — transform-based volume, priority ordering and edge blend weight matching original DS_HazeZone.
 - Assets/Scripts/Mobile/MobileDistanceFog.cs — original overlapping-zone selection/blending and camera integration.
 - Assets/Scripts/Mobile/OfflinePrototypeBootstrap.cs — original zone hierarchy and serialized transforms for the offline sandbox.
-- Assets/Resources/MobileDistanceFog.shader — low-cost depth-based geometry fog.
+- Assets/Resources/MobileDistanceFog.shader — depth-based geometry extinction plus optional unshadowed directional haze radiance.
 
 ## Validation still required
 
-The GitHub source-contract check is not a Unity compilation or an Android-device test. Unity compilation and visual validation on the Android device are still required. The first visual test should establish whether the geometry fog's extinction response is visually close to TABZ without desaturating the weapon or nearby ground. If it is not, adjust only after comparing a reproducible in-game test; do not restore arbitrary distance presets.
+The GitHub source-contract check is not a Unity compilation or an Android-device test. Unity compilation and visual validation on the Android device are still required. Scattering is disabled by default (`scatteringEnabled = false`) until its brightness, direction and frame cost are checked on-device. Enable it on the `MobileDistanceFog` component for the A/B test; `intensityMultiplier = 0` bypasses both effects. The first visual test should establish whether the geometry fog's extinction response is visually close to TABZ without desaturating the weapon or nearby ground. If it is not, adjust only after comparing a reproducible in-game test; do not restore arbitrary distance presets.
 
 ## Source record
 
