@@ -2,10 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Mobile-friendly reconstruction of TABZ's original sunnyDay sky and
-/// atmospheric fog. The original skybox material and its serialized colour
-/// values are preserved. AssetRipper exported the original gradient shader
-/// as a white dummy, so the gradient shader in this project is reconstructed
-/// from the material's exposed properties.
+/// atmospheric fog. The skybox material values come from the original
+/// TABZ_World scene; the gradient shader math was recovered from its DX11
+/// vertex/pixel programs and re-authored for the mobile render pipeline.
 /// The original DeepSky Haze shader's functional ShaderLab/HLSL source was not
 /// recoverable as a Unity asset. MobileDistanceFog uses the recovered serialized
 /// contexts with a low-cost depth-based geometry approximation.
