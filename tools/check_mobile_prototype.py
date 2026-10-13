@@ -189,7 +189,7 @@ else:
     for token in ("float3 direction : TEXCOORD0", "o.direction = v.direction", "normalize(i.direction)", "dot(direction, _UpVector.xyz)", "pow(height, _Exponent)", "lerp(_Color2, _Color1, gradient)", "sky *= _Intensity"):
         if token not in source:
             errors.append(f"Skybox_Gradient Skybox.shader: missing recovered DXBC behavior {token!r}")
-    for forbidden in ("_UpVectorPitch", "_UpVectorYaw", "normalize(_UpVector.xyz)", "saturate(dot("):
+    for forbidden in ("float pitch =", "float yaw =", "normalize(_UpVector.xyz)", "saturate(dot("):
         if forbidden in source:
             errors.append(f"Skybox_Gradient Skybox.shader: non-original gradient operation {forbidden!r} remains")
 
