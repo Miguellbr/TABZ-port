@@ -68,6 +68,33 @@ jobs:
           print("Unity root:", game_root)
           print("Assembly-CSharp:", [(str(p), p.stat().st_size) for p in game_root.rglob("Assembly-CSharp.dll")])
           PY
+      - name: Resolve duplicate managed assembly before import
+        run: |
+          python - <<'PY'
+          import pathlib, hashlib
+          root = pathlib.Path("extracted/game")
+          rows = []
+          for p in sorted(root.rglob("*.dll")):
+              rows.append((p, p.name.lower(), hashlib.sha256(p.read_bytes()).hexdigest()))
+          print("DLL files discovered:", len(rows))
+          for p, name, digest in rows:
+              print(f"{p} | {p.stat().st_size} bytes | {digest}")
+          # The v4 archive contains a duplicate copy of Assembly-CSharp under a
+          # different filename. AssetRipper keys assemblies by internal identity,
+          # so this backup makes Mono initialization fail before script recovery.
+          duplicates = [p for p, name, _ in rows if name in {"assembly-csharp - copy.dll", "assembly-csharp-copy.dll"}]
+          for p in duplicates:
+              print("Removing duplicate backup assembly:", p)
+              p.unlink()
+          remaining = [p for p, name, _ in rows if name in {"assembly-csharp.dll", "assembly-csharp - copy.dll", "assembly-csharp-copy.dll"} and p.exists()]
+          print("Remaining primary Assembly-CSharp candidates:", [str(p) for p in remaining])
+          if not remaining:
+              raise SystemExit("No primary Assembly-CSharp DLL remains after duplicate cleanup")
+          pathlib.Path("output/v4-managed-assembly-audit.txt").write_text(
+              "\\n".join(f"{p} | {p.stat().st_size} bytes | {hashlib.sha256(p.read_bytes()).hexdigest()}" for p in sorted(root.rglob("*.dll"))) + "\\n"
+          )
+          PY
+
       - name: Download AssetRipper CLI
         run: |
           curl -fL --retry 3 "https://github.com/nowl-it/AssetRipperCLI/releases/download/v1.0.1/AssetRipper_linux_x64.zip" -o /tmp/assetripper.zip
