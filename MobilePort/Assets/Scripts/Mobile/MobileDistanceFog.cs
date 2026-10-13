@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -17,6 +18,7 @@ public class MobileDistanceFog : MonoBehaviour
     private TabzHazeContextData.Settings activeSettings;
     private TabzHazeContextData.ZoneKind activeZone = TabzHazeContextData.ZoneKind.General;
     private TabzHazeZone[] zones;
+    private readonly List<TabzHazeZone> matchingZones = new List<TabzHazeZone>(8);
     private float nextContextRefresh;
     private float lastAppliedTime = -1f;
 
@@ -93,22 +95,52 @@ public class MobileDistanceFog : MonoBehaviour
     {
         if (targetCamera == null || fogMaterial == null) return;
 
-        TabzHazeContextData.ZoneKind selectedZone = TabzHazeContextData.ZoneKind.General;
-        int selectedPriority = int.MinValue;
-
         if (zones == null) zones = FindObjectsOfType<TabzHazeZone>();
+
+        Vector3 cameraPosition = targetCamera.transform.position;
+        matchingZones.Clear();
+
         for (int i = 0; i < zones.Length; i++)
         {
             TabzHazeZone candidate = zones[i];
-            if (candidate == null || !candidate.Contains(targetCamera.transform.position))
-                continue;
+            if (candidate != null && candidate.Contains(cameraPosition))
+                matchingZones.Add(candidate);
+        }
 
-            TabzHazeContextData.ZoneInfo info =
-                TabzHazeContextData.GetZoneInfo(candidate.zone);
-            if (info.priority > selectedPriority)
+        TabzHazeContextData.Settings nextSettings;
+        TabzHazeContextData.ZoneKind selectedZone;
+
+        if (matchingZones.Count == 0)
+        {
+            // The offline sandbox has a general-context fallback if no
+            // recovered zone marker is present in a scene.
+            selectedZone = TabzHazeContextData.ZoneKind.General;
+            nextSettings = TabzHazeContextData.Evaluate(
+                selectedZone, normalizedDayTime);
+        }
+        else
+        {
+            // DS_HazeCore sorts by ascending priority, then ascending zone
+            // size. It starts with the first context and sequentially blends
+            // every later overlapping zone using that zone's edge weight.
+            matchingZones.Sort(TabzHazeZone.ComparePriorityAndSize);
+
+            TabzHazeZone firstZone = matchingZones[0];
+            selectedZone = firstZone.zone;
+            nextSettings = TabzHazeContextData.Evaluate(
+                firstZone.zone, normalizedDayTime);
+
+            for (int i = 1; i < matchingZones.Count; i++)
             {
-                selectedPriority = info.priority;
-                selectedZone = candidate.zone;
+                TabzHazeZone overlayZone = matchingZones[i];
+                float blendWeight = overlayZone.GetBlendWeight(cameraPosition);
+                TabzHazeContextData.Settings overlaySettings =
+                    TabzHazeContextData.Evaluate(
+                        overlayZone.zone, normalizedDayTime);
+
+                nextSettings = TabzHazeContextData.Settings.Lerp(
+                    nextSettings, overlaySettings, blendWeight);
+                selectedZone = overlayZone.zone;
             }
         }
 
@@ -117,7 +149,7 @@ public class MobileDistanceFog : MonoBehaviour
             return;
 
         activeZone = selectedZone;
-        activeSettings = TabzHazeContextData.Evaluate(activeZone, normalizedDayTime);
+        activeSettings = nextSettings;
         lastAppliedTime = normalizedDayTime;
         ApplySettings();
     }
