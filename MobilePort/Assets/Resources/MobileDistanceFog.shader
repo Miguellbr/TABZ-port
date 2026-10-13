@@ -87,7 +87,6 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                 float3 cameraPosition = _WorldSpaceCameraPos;
                 float cameraHeight = cameraPosition.y;
                 float verticalDelta = worldRay.y * segmentLength;
-                float sampleStartHeight = cameraHeight + worldRay.y * startDistance;
 
                 // The original controller supplies initial density at the
                 // camera height as exp(-falloff*abs(cameraY)). Advance that
