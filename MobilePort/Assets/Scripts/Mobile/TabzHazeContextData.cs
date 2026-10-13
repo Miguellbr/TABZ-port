@@ -18,28 +18,43 @@ public static class TabzHazeContextData
 
     public struct Settings
     {
+        // Original DS_HazeContextItem air and haze channels.
+        public float airScatteringScale;
+        public float airDensityHeightFalloff;
+        public float hazeScatteringScale;
+        public float hazeDensityHeightFalloff;
+        public float hazeScatteringDirection;
+        public float hazeSecondaryScatteringRatio;
+
+        // Original DS_HazeContextItem fog channel.
         public float extinction;
         public float heightFalloff;
+        public float fogScatteringScale;
+        public float fogScatteringDirection;
         public Color ambient;
         public Color lightColour;
         public float opacity;
         public float startDistance;
-        public float scatteringScale;
-        public float scatteringDirection;
 
         public static Settings Lerp(Settings a, Settings b, float t)
         {
             t = Mathf.Clamp01(t);
             return new Settings
             {
+                airScatteringScale = Mathf.Lerp(a.airScatteringScale, b.airScatteringScale, t),
+                airDensityHeightFalloff = Mathf.Lerp(a.airDensityHeightFalloff, b.airDensityHeightFalloff, t),
+                hazeScatteringScale = Mathf.Lerp(a.hazeScatteringScale, b.hazeScatteringScale, t),
+                hazeDensityHeightFalloff = Mathf.Lerp(a.hazeDensityHeightFalloff, b.hazeDensityHeightFalloff, t),
+                hazeScatteringDirection = Mathf.Lerp(a.hazeScatteringDirection, b.hazeScatteringDirection, t),
+                hazeSecondaryScatteringRatio = Mathf.Lerp(a.hazeSecondaryScatteringRatio, b.hazeSecondaryScatteringRatio, t),
                 extinction = Mathf.Lerp(a.extinction, b.extinction, t),
                 heightFalloff = Mathf.Lerp(a.heightFalloff, b.heightFalloff, t),
+                fogScatteringScale = Mathf.Lerp(a.fogScatteringScale, b.fogScatteringScale, t),
+                fogScatteringDirection = Mathf.Lerp(a.fogScatteringDirection, b.fogScatteringDirection, t),
                 ambient = Color.Lerp(a.ambient, b.ambient, t),
                 lightColour = Color.Lerp(a.lightColour, b.lightColour, t),
                 opacity = Mathf.Lerp(a.opacity, b.opacity, t),
-                startDistance = Mathf.Lerp(a.startDistance, b.startDistance, t),
-                scatteringScale = Mathf.Lerp(a.scatteringScale, b.scatteringScale, t),
-                scatteringDirection = Mathf.Lerp(a.scatteringDirection, b.scatteringDirection, t)
+                startDistance = Mathf.Lerp(a.startDistance, b.startDistance, t)
             };
         }
     }
@@ -65,14 +80,20 @@ public static class TabzHazeContextData
     {
         return new Settings
         {
+            airScatteringScale = 1f,
+            airDensityHeightFalloff = 0.001f,
+            hazeScatteringScale = 1f,
+            hazeDensityHeightFalloff = 0.003f,
+            hazeScatteringDirection = 0.4f,
+            hazeSecondaryScatteringRatio = 0.8f,
             extinction = extinction * 0.01f,
             heightFalloff = heightFalloff,
+            fogScatteringScale = 0f,
+            fogScatteringDirection = 0.7f,
             ambient = ambient,
             lightColour = FogLight,
             opacity = 1f,
-            startDistance = 0f,
-            scatteringScale = 0f,
-            scatteringDirection = 0.7f
+            startDistance = 0f
         };
     }
 
