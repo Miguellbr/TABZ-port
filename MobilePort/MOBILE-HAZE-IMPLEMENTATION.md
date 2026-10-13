@@ -22,7 +22,7 @@ This file records what is currently wired into MobilePort after recovering the o
 - The original map itself is still absent. The five haze-zone transforms are present in the offline sandbox, but the map geometry is not.
 - The optional scattering path now keeps the three recovered channels separate: RGB air/Rayleigh (`_DS_RBetaS` coefficients), haze (`0.0021` scale conversion and its own phase), and fog scattering (its own scale and anisotropy). Air, haze and fog density are integrated analytically along the ray using the exponential-profile integral recovered from DXBC; the former eight haze midpoint samples were removed. The unshadowed local haze term uses `(1 - secondaryRatio)`, matching the main composite. The complementary `secondaryRatio` belongs to the separate shadowed directional-radiance pass.
 - This is deliberately reduced: unlike original DX11 pass 0, it has no cascaded-shadow visibility (the original performs 15 shadow-comparison samples), interleaved sampling offsets, half-resolution radiance buffer, bilateral blur or skybox integration. The final composite also still lacks the original radiance-buffer upsample and exact ambient/direct fog-light composition. The new air/haze/fog terms are therefore a closer analytic approximation, not full Rayleigh/Mie parity.
-- The ray reconstruction still needs a dedicated pixel-equivalence check against the original vertex-generated `_ViewportCorner`, `_ViewportRight`, and `_ViewportUp` ray. The current inverse-projection ray is mathematically conventional for the mobile camera, but has not yet been proven pixel-identical to the original.
+- The camera ray now uses the exact original `DS_HazeView` basis: `forward * farClip`, `right * (tan(FOV/2) * aspect * farClip)`, and `up * (tan(FOV/2) * farClip)`, assembled into `_ViewportCorner`, `_ViewportRight`, and `_ViewportUp`. The same `_MainTex_TexelSize.y < 0` vertical flip is applied. The basis is refreshed immediately before each blit so camera movement/FOV changes are reflected.
 
 ## Files
 
@@ -30,11 +30,11 @@ This file records what is currently wired into MobilePort after recovering the o
 - Assets/Scripts/Mobile/TabzHazeZone.cs — transform-based volume, priority ordering and edge blend weight matching original DS_HazeZone.
 - Assets/Scripts/Mobile/MobileDistanceFog.cs — original overlapping-zone selection/blending and camera integration.
 - Assets/Scripts/Mobile/OfflinePrototypeBootstrap.cs — original zone hierarchy and serialized transforms for the offline sandbox.
-- Assets/Resources/MobileDistanceFog.shader — depth-based geometry extinction plus optional unshadowed directional haze radiance.
+- Assets/Resources/MobileDistanceFog.shader — depth-based geometry extinction plus optional unshadowed directional haze radiance, using the recovered original viewport-ray interpolation.
 
 ## Validation still required
 
-The GitHub source-contract check is not a Unity compilation or an Android-device test. Unity compilation and visual validation on the Android device are still required. Scattering is disabled by default (`scatteringEnabled = false`) until its brightness, direction and frame cost are checked on-device. Toggle it from **DESEMPENHO → ESPALHAMENTO DIRECIONAL: LIGAR / DESLIGAR** for the A/B test; `intensityMultiplier = 0` bypasses both effects. The first visual test should establish whether the geometry fog's extinction response is visually close to TABZ without desaturating the weapon or nearby ground. If it is not, adjust only after comparing a reproducible in-game test; do not restore arbitrary distance presets.
+The GitHub source-contract check is not a Unity compilation or an Android-device test. Unity compilation and visual validation on the Android device are still required. The camera-ray implementation now matches the recovered source formula at code level, but pixel parity still depends on the actual Unity blit UV orientation and render backend. Scattering is disabled by default (`scatteringEnabled = false`) until its brightness, direction and frame cost are checked on-device. Toggle it from **DESEMPENHO → ESPALHAMENTO DIRECIONAL: LIGAR / DESLIGAR** for the A/B test; `intensityMultiplier = 0` bypasses both effects. The first visual test should establish whether the geometry fog's extinction response is visually close to TABZ without desaturating the weapon or nearby ground. If it is not, adjust only after comparing a reproducible in-game test; do not restore arbitrary distance presets.
 
 ## Source record
 
