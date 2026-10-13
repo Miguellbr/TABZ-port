@@ -54,9 +54,9 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                     (denominator * denominator) * 0.0795774683;
             }
 
-            fixed4 frag(v2f_img i) : SV_Target
+            float4 frag(v2f_img i) : SV_Target
             {
-                fixed4 scene = tex2D(_MainTex, i.uv);
+                float4 scene = tex2D(_MainTex, i.uv);
                 float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
                 float eyeDepth = LinearEyeDepth(rawDepth);
 
@@ -70,7 +70,7 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                 {
                     float depthView = saturate(eyeDepth / 100.0);
                     float depthGray = lerp(depthView, 1.0, isSky);
-                    return fixed4(depthGray, depthGray, depthGray, 1.0);
+                    return float4(depthGray, depthGray, depthGray, 1.0);
                 }
 
                 // Unity's inverse projection yields a view ray whose Z is
