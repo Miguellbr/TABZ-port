@@ -10,7 +10,7 @@ This file records what is currently wired into `MobilePort` after recovering the
 - The three transition curves for `MyDay_Copy`, `MyDay_Copy_Copy`, and `Night` are evaluated in the original serialized order, with `MyDay` as the base context.
 - The mobile shader now uses depth-aware exponential extinction and the selected context's ambient colour. It no longer uses the previous hand-picked start/end-distance presets or a uniform grey sky wash.
 - The fog toggle follows the recovered original behavior: disabling fog moves its start distance to 5 rather than deleting the entire atmosphere.
-- The context curves are cached once instead of allocating new curves every refresh.
+- The context curves are cached once instead of allocating new curves every refresh.\n- The original v4 and v5.1 gameplay zone components, context values and transforms were compared; all five serialized zone components are byte-for-byte identical. The v5.1-only difference relevant to fog is the fog-toggle start distance of 5 when disabled.
 
 ## Current prototype behavior and limits
 
