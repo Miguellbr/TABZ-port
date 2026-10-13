@@ -283,6 +283,29 @@ public class MobileDistanceFog : MonoBehaviour
             " | Erro: " + errorStatus;
     }
 
+    private void UpdateOriginalViewportRays()
+    {
+        if (fogMaterial == null || targetCamera == null) return;
+
+        // Reproduce DS_HazeView's original _ViewportCorner/Right/Up setup.
+        // The original shader interpolates this far-clip-sized basis and
+        // multiplies it by Linear01Depth in the pixel stage.
+        float farClip = targetCamera.farClipPlane;
+        float halfFovRadians = targetCamera.fieldOfView * 0.5f * Mathf.Deg2Rad;
+        float halfHeight = Mathf.Tan(halfFovRadians) * farClip;
+        float halfWidth = halfHeight * targetCamera.aspect;
+        Transform cameraTransform = targetCamera.transform;
+
+        Vector3 forward = cameraTransform.forward * farClip;
+        Vector3 right = cameraTransform.right * halfWidth;
+        Vector3 up = cameraTransform.up * halfHeight;
+
+        fogMaterial.SetVector("_ViewportCorner", forward - right - up);
+        fogMaterial.SetVector("_ViewportRight", right * 2f);
+        fogMaterial.SetVector("_ViewportUp", up * 2f);
+        fogMaterial.SetFloat("_ViewportFarClip", farClip);
+    }
+
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         renderImageCalls++;
@@ -291,6 +314,10 @@ public class MobileDistanceFog : MonoBehaviour
             Graphics.Blit(source, destination);
             return;
         }
+
+        // Camera transform/projection can change after Update; match the
+        // original DS_HazeView, which rebuilds its viewport basis at render.
+        UpdateOriginalViewportRays();
 
         // A zero-intensity setting is a true bypass, not merely zero extinction.
         // Keep the depth diagnostic available even when the fog slider is at 0%.
