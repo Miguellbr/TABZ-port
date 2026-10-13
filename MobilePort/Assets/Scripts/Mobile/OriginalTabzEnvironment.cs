@@ -26,7 +26,9 @@ public class OriginalTabzEnvironment : MonoBehaviour
             Debug.LogWarning("OriginalTabzEnvironment: original sunnyDay skybox material was not found.");
         }
 
-        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+        // TABZ_World.unity serializes m_AmbientMode = 0 (Skybox).
+        // Trilight would bypass the original skybox-derived ambient probe.
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Skybox;
         RenderSettings.ambientSkyColor = new Color(1.5f, 1.2838235f, 0.95955884f, 1f);
         RenderSettings.ambientEquatorColor = new Color(0.114f, 0.125f, 0.133f, 1f);
         RenderSettings.ambientGroundColor = new Color(0.047f, 0.043f, 0.035f, 1f);
