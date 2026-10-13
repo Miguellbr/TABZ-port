@@ -199,9 +199,9 @@ The main composite's haze term is therefore not a substitute for pass 0. Pass 0 
 - The earlier table's implication that `_DS_BetaParams.y` is only a generic secondary ratio was incomplete: in the main composite, the haze phase term is multiplied by `(1-y)`, while pass 0 accumulates the complementary primary contribution using `y`.
 - The fog scattering term is not absent from the original pipeline: it is a distinct phase contribution in the composite. The mobile implementation currently does not calculate it.
 - The existing mobile scalar `0.0021` is correctly the conversion factor for haze scale, not a replacement for the RGB `_DS_RBetaS` vector.
-- The exact camera-ray interpolation still needs a dedicated equivalence check against the original `_ViewportCorner/_ViewportRight/_ViewportUp` construction. This section confirms the composite's use of the ray quantities, not that the current inverse-projection reconstruction is pixel-identical.
+- The original camera-ray interpolation has now been recovered from both DXBC and the decompiled `DS_HazeView` C# source. The mobile implementation has been changed to use that same far-clip-scaled camera basis and UV-flip rule.
 
-No shader implementation was changed during this register-mapping investigation. The only shader change so far remains commit `1e48fbdf`, which makes extinction use the same world-space ray length already used by scattering.
+The original ray-basis implementation is in `MobileDistanceFog.cs` and `MobileDistanceFog.shader`; the source-contract workflow now checks its camera basis inputs and UV-flip behavior.
 
 ## 11. Camera-ray interpolation — vertex programs 0 and 32
 
@@ -215,7 +215,24 @@ The extracted DX11 vertex programs paired with both pass 0 (program 0) and the m
 
 The pixel programs then multiply this interpolated `TEXCOORD2` ray by linear eye depth. In pass 0, the resulting world-space position is camera position plus that scaled ray. This confirms that `TEXCOORD2` is a camera-depth ray basis (its forward component is the unit-depth reference), not a normalized direction vector to be multiplied by Euclidean distance.
 
-The mobile shader currently reconstructs the corresponding perspective ray through `unity_CameraInvProjection`, normalizes its view-space Z to -1, and transforms it to world space. That is the conventional equivalent for a centered perspective camera, but it has not yet been proven pixel-identical to the original camera-generated basis, especially for texture Y-flip, non-default projection matrices, or any camera lens shift.
+The decompiled C# source in `haze-source/DeepSky.Haze.DS_HazeView.cs` from artifact `tabz-deepsky-haze-mapping` (workflow run `38304981439`) supplies the exact setter:
 
-**Remaining evidence gap:** the exact C# assignments that populate `_ViewportCorner`, `_ViewportRight`, and `_ViewportUp`—including how the original controller applies far-clip distance—are not present in the recovered source excerpts currently available in this repository. Do not replace the mobile inverse-projection path with guessed camera-basis arithmetic. Recover those setter expressions first, then compare the resulting corner/right/up vectors against Unity's inverse-projection rays at the four viewport corners and center.
+```csharp
+float farClipPlane = m_Camera.farClipPlane;
+float halfFov = m_Camera.fieldOfView * 0.5f;
+float halfHeight = Mathf.Tan(halfFov * Mathf.Deg2Rad) * farClipPlane;
+float halfWidth = halfHeight * m_Camera.aspect;
+Vector3 forward = m_Transform.forward * farClipPlane;
+Vector3 right = m_Transform.right * halfWidth;
+Vector3 up = m_Transform.up * halfHeight;
+_ViewportCorner = forward - right - up;
+_ViewportRight = right * 2f;
+_ViewportUp = up * 2f;
+```
+
+The vertex shader interpolates `corner + right*u + up*v`. It changes `v` to `1-v` when `_MainTex_TexelSize.y < 0`. The pixel shader multiplies this far-clip-sized ray by Linear01Depth; since `farClip * Linear01Depth = LinearEyeDepth`, the equivalent mobile world-space segment is `eyeDepth * (viewportRay / farClip)`.
+
+`MobileDistanceFog.UpdateOriginalViewportRays()` now rebuilds these exact three vectors from the active camera's transform, FOV, aspect and far clip immediately before each blit. The shader uses the same linear interpolation and texture-Y flip, then derives world-ray direction and world-space segment length from that basis. This deliberately matches the original formula rather than supporting custom lens-shift/projection matrices that the original setter itself did not account for.
+
+**Remaining validation:** the code-level formula is now recovered and wired. Unity compilation and a visual comparison on the Android device are still required; source-contract success alone cannot establish render-pixel parity.
 
