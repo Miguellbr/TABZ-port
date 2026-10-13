@@ -79,7 +79,7 @@ The runtime environment also previously forced AmbientMode.Trilight. That contra
 
 ## 5. Remaining validation
 
-The DXBC-to-mobile shader behavior and serialized scene/material values are now mapped and implemented. GitHub source-contract checks pass, but this is not a Unity shader compilation or a device visual test.
+The DXBC-to-mobile shader behavior and serialized scene/material values are now mapped and implemented. GitHub source-contract checks passed in [run 38479971062](https://github.com/Miguellbr/TABZ-port/actions/runs/38479971062), but this is not a Unity shader compilation or a device visual test.
 
 Still required:
 - Compile the Unity project with the mobile graphics backend.
