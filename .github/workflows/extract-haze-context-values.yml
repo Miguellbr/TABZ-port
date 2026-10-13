@@ -38,6 +38,14 @@ jobs:
           ]
           script_hits = []
           object_hits = []
+          skybox_hits = []
+          skybox_keywords = [
+              "sunnyDay", "m_SkyboxMaterial", "m_AmbientMode",
+              "m_AmbientSkyColor", "m_AmbientEquatorColor",
+              "m_AmbientGroundColor", "m_AmbientIntensity",
+              "_Color1", "_Color2", "_UpVector", "_Intensity",
+              "_Exponent", "_UpVectorPitch", "_UpVectorYaw"
+          ]
           errors = []
           for path in files:
               try:
@@ -53,17 +61,24 @@ jobs:
               blocks = re.split(r"(?=^--- !u!)", text, flags=re.M)
               for block in blocks:
                   matched = [k for k in keywords if k.lower() in block.lower()]
-                  if not matched:
-                      continue
-                  object_hits.append({
-                      "path": path.as_posix(),
-                      "matched": matched,
-                      "block": block[:30000]
-                  })
+                  if matched:
+                      object_hits.append({
+                          "path": path.as_posix(),
+                          "matched": matched,
+                          "block": block[:30000]
+                      })
+                  sky_matches = [k for k in skybox_keywords if k.lower() in block.lower()]
+                  if sky_matches:
+                      skybox_hits.append({
+                          "path": path.as_posix(),
+                          "matched": sky_matches,
+                          "block": block[:30000]
+                      })
           report = {
               "scanned_files": len(files),
               "script_hits": script_hits,
               "serialized_object_hits": object_hits,
+              "skybox_render_settings_hits": skybox_hits,
               "read_errors": errors
           }
           out = pathlib.Path("haze-context-values")
