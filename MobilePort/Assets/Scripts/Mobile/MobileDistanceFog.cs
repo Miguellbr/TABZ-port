@@ -225,6 +225,16 @@ public class MobileDistanceFog : MonoBehaviour
             activeSettings.hazeScatteringDirection);
         fogMaterial.SetFloat("_HazeSecondaryRatio",
             activeSettings.hazeSecondaryScatteringRatio);
+        // The original composite has independent air/Rayleigh and fog
+        // scattering channels; neither is interchangeable with haze strength.
+        fogMaterial.SetFloat("_AirScatteringScale",
+            activeSettings.airScatteringScale);
+        fogMaterial.SetFloat("_AirHeightFalloff",
+            activeSettings.airDensityHeightFalloff);
+        fogMaterial.SetFloat("_FogScatteringScale",
+            activeSettings.fogScatteringScale);
+        fogMaterial.SetFloat("_FogScatteringDirection",
+            activeSettings.fogScatteringDirection);
         fogMaterial.SetFloat("_ScatteringEnabled", scatteringEnabled ? 1f : 0f);
 
         UpdateDirectionalLight();
