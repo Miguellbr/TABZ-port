@@ -14,7 +14,7 @@ FILES = {
     "OfflinePrototypeZombie.cs": ["class OfflinePrototypeZombie", "TakeDamage", "IsDead"],
     "OriginalWeaponVisualBridge.cs": ["class OriginalWeaponVisualBridge", "Resources.Load<GameObject>", "OriginalTabzArmsRig", "MoveWeaponToOriginalAim"],
     "OriginalTabzArmsRig.cs": ["class OriginalTabzArmsRig", "CharacterJoint", "ConfigurableJoint", "CapsuleCollider", "SuperSlippery", "Resources.Load<Mesh>", "boneWeights", "WeaponPosition", "WeaponRightHandTag", "ReloadAimTag"],
-    "MobileDistanceFog.cs": ["class MobileDistanceFog", "TabzHazeContextData.Evaluate", '"_FogExtinction"', "SetFog(bool value)", "matchingZones.Sort", "GetBlendWeight", "Settings.Lerp"],
+    "MobileDistanceFog.cs": ["class MobileDistanceFog", "TabzHazeContextData.Evaluate", '"_FogExtinction"', "SetFog(bool value)", "matchingZones.Sort", "GetBlendWeight", "Settings.Lerp", "scatteringEnabled", "UpdateDirectionalLight", '"_HazeScattering"', '"_ScatteringEnabled"'],
     "TabzHazeContextData.cs": ["class TabzHazeContextData", "0.015f", "0.0001f", "0.6653145f", "EvaluateNightCurve"],
     "TabzHazeZone.cs": ["class TabzHazeZone", "InverseTransformPoint", "GetBlendWeight", "ComparePriorityAndSize", "blendRange"],
 }
@@ -124,7 +124,7 @@ if not haze_shader.is_file():
     errors.append("Missing mobile haze shader")
 else:
     shader_source = haze_shader.read_text(encoding="utf-8")
-    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)"):
+    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)", "_HazeScattering", "_HazeHeightFalloff", "_HazeDirection", "_HazeSecondaryRatio", "_ScatteringEnabled", "_LightDirection", "_LightColour", "unity_CameraInvProjection", "densityIntegral", "hazeRadiance"):
         if token not in shader_source:
             errors.append(f"MobileDistanceFog.shader: missing expected token {token!r}")
     for forbidden in ("_FogEnd", "_SkyFogStrength"):
