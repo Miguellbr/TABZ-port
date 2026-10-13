@@ -202,3 +202,20 @@ The main composite's haze term is therefore not a substitute for pass 0. Pass 0 
 - The exact camera-ray interpolation still needs a dedicated equivalence check against the original `_ViewportCorner/_ViewportRight/_ViewportUp` construction. This section confirms the composite's use of the ray quantities, not that the current inverse-projection reconstruction is pixel-identical.
 
 No shader implementation was changed during this register-mapping investigation. The only shader change so far remains commit `1e48fbdf`, which makes extinction use the same world-space ray length already used by scattering.
+
+## 11. Camera-ray interpolation — vertex programs 0 and 32
+
+The extracted DX11 vertex programs paired with both pass 0 (program 0) and the main composite (program 32) were inspected. Their ray-output logic is identical:
+
+- `cb0[24]` maps to `_ViewportCorner`.
+- `cb0[25]` maps to `_ViewportRight`.
+- `cb0[26]` maps to `_ViewportUp`.
+- `cb0[20].y < 0` controls the vertical UV flip.
+- The interpolated ray output is `o3 = _ViewportCorner + _ViewportRight * u + _ViewportUp * v`, with `v` replaced by `1-v` when the source texture is vertically flipped.
+
+The pixel programs then multiply this interpolated `TEXCOORD2` ray by linear eye depth. In pass 0, the resulting world-space position is camera position plus that scaled ray. This confirms that `TEXCOORD2` is a camera-depth ray basis (its forward component is the unit-depth reference), not a normalized direction vector to be multiplied by Euclidean distance.
+
+The mobile shader currently reconstructs the corresponding perspective ray through `unity_CameraInvProjection`, normalizes its view-space Z to -1, and transforms it to world space. That is the conventional equivalent for a centered perspective camera, but it has not yet been proven pixel-identical to the original camera-generated basis, especially for texture Y-flip, non-default projection matrices, or any camera lens shift.
+
+**Remaining evidence gap:** the exact C# assignments that populate `_ViewportCorner`, `_ViewportRight`, and `_ViewportUp`—including how the original controller applies far-clip distance—are not present in the recovered source excerpts currently available in this repository. Do not replace the mobile inverse-projection path with guessed camera-basis arithmetic. Recover those setter expressions first, then compare the resulting corner/right/up vectors against Unity's inverse-projection rays at the four viewport corners and center.
+
