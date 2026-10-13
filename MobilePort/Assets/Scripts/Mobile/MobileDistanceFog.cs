@@ -61,6 +61,8 @@ public class MobileDistanceFog : MonoBehaviour
 
     private void Update()
     {
+        UpdateDirectionalLight();
+
         if (Time.unscaledTime >= nextContextRefresh)
         {
             nextContextRefresh = Time.unscaledTime + 0.25f;
@@ -186,9 +188,15 @@ public class MobileDistanceFog : MonoBehaviour
             activeSettings.hazeSecondaryScatteringRatio);
         fogMaterial.SetFloat("_ScatteringEnabled", scatteringEnabled ? 1f : 0f);
 
-        // DeepSky uses the active directional light's direction and colour.
-        // RenderSettings.sun is the explicit source; without one, the
-        // reduced scattering contribution stays black instead of guessing.
+        UpdateDirectionalLight();
+    }
+
+    private void UpdateDirectionalLight()
+    {
+        if (fogMaterial == null) return;
+
+        // Refresh every frame because the original day/night cycle rotates
+        // the directional light independently of haze-context transitions.
         Light sun = RenderSettings.sun;
         if (sun != null && sun.type == LightType.Directional)
         {
