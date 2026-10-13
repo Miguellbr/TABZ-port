@@ -8,7 +8,7 @@ FILES = {
     "MobileInputState.cs": ["class MobileInputState", "FirePressed", "InventoryTogglePressed", "HotbarSlotPressed"],
     "MobileControlsBootstrap.cs": ["class MobileControlsBootstrap", "MobileVirtualJoystick", "MobileLookArea", "Hotbar6", "Inventory"],
     "MobileInventoryBridge.cs": ["class MobileInventoryBridge", "UIInventory", "ToggleOpen", "UpdateHotbarSelection"],
-    "OfflinePrototypeBootstrap.cs": ["class OfflinePrototypeBootstrap", "BuildWorld", "BuildHud", "BuildInventoryPanel", "SpawnZombie"],
+    "OfflinePrototypeBootstrap.cs": ["class OfflinePrototypeBootstrap", "BuildWorld", "BuildHud", "BuildInventoryPanel", "SpawnZombie", "SetScattering", "ESPALHAMENTO DIRECIONAL"],
     "OfflinePrototypePlayer.cs": ["class OfflinePrototypePlayer", "CharacterController", "ConsumeLookDelta", "Input.GetAxisRaw"],
     "OfflinePrototypeWeapon.cs": ["class OfflinePrototypeWeapon", "void Fire()", "void Reload()", "Physics.Raycast"],
     "OfflinePrototypeZombie.cs": ["class OfflinePrototypeZombie", "TakeDamage", "IsDead"],
