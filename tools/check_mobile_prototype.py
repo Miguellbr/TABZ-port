@@ -124,7 +124,7 @@ if not haze_shader.is_file():
     errors.append("Missing mobile haze shader")
 else:
     shader_source = haze_shader.read_text(encoding="utf-8")
-    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)", "_HazeScattering", "_HazeHeightFalloff", "_HazeDirection", "_HazeSecondaryRatio", "_ScatteringEnabled", "_LightDirection", "_LightColour", "unity_CameraInvProjection", "densityIntegral", "hazeRadiance"):
+    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)", "_HazeScattering", "_HazeHeightFalloff", "_HazeDirection", "_HazeSecondaryRatio", "_AirScatteringScale", "_AirHeightFalloff", "_FogScatteringScale", "_FogScatteringDirection", "_ScatteringEnabled", "_LightDirection", "_LightColour", "unity_CameraInvProjection", "IntegrateExponentialDensity", "fogDensityIntegral", "airIntegral", "hazeIntegral", "atmosphereRadiance", "(1.0 - saturate(_HazeSecondaryRatio))"):
         if token not in shader_source:
             errors.append(f"MobileDistanceFog.shader: missing expected token {token!r}")
     for forbidden in ("_FogEnd", "_SkyFogStrength"):
