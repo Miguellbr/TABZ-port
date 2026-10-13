@@ -131,9 +131,73 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
         gameObject.AddComponent<OriginalTabzEnvironment>();
+        BuildOriginalHazeZones();
         distanceFog = cameraObject.AddComponent<MobileDistanceFog>();
         ApplyFogSettings();
         SpawnZombie();
+    }
+
+
+    private void BuildOriginalHazeZones()
+    {
+        // These two parent transforms and the five child transforms are
+        // recovered from TABZ_World.unity. The parent scales and rotations
+        // are identity, so the serialized local zone transforms are preserved.
+        GameObject dayNightRoot = new GameObject("DayAndNightCycle (haze transform)");
+        dayNightRoot.transform.position =
+            new Vector3(-308.82278f, -317.1259f, 1399.1091f);
+
+        GameObject hazeController = new GameObject("DS_HazeController (zone parent)");
+        hazeController.transform.SetParent(dayNightRoot.transform, false);
+        hazeController.transform.localPosition =
+            new Vector3(727.6909f, 317.1259f, -815.5936f);
+
+        CreateOriginalHazeZone(hazeController.transform, "DS_HazeZone",
+            TabzHazeContextData.ZoneKind.General,
+            Vector3.zero,
+            new Vector3(2283.2312f, 1200.8811f, 2183.5205f));
+
+        CreateOriginalHazeZone(hazeController.transform, "Snow2",
+            TabzHazeContextData.ZoneKind.Snow2,
+            new Vector3(89.7f, 188.2f, 391.5f),
+            new Vector3(242.87401f, 251.06976f, 264.7568f));
+
+        CreateOriginalHazeZone(hazeController.transform, "LightHouse",
+            TabzHazeContextData.ZoneKind.LightHouse,
+            new Vector3(152.2f, 201.41f, -260.2f),
+            new Vector3(40.395077f, 35.78625f, 33.292164f));
+
+        CreateOriginalHazeZone(hazeController.transform, "Snow",
+            TabzHazeContextData.ZoneKind.Snow,
+            new Vector3(123.5f, 160.8f, 803.2f),
+            new Vector3(204.26584f, 180.96031f, 203.59604f));
+
+        CreateOriginalHazeZone(hazeController.transform, "darknes",
+            TabzHazeContextData.ZoneKind.Darkness,
+            new Vector3(90.7f, 140.4f, 369.5f),
+            new Vector3(56.68853f, 91.9938f, 51.398403f));
+    }
+
+    private static void CreateOriginalHazeZone(
+        Transform parent,
+        string objectName,
+        TabzHazeContextData.ZoneKind zoneKind,
+        Vector3 localPosition,
+        Vector3 localScale)
+    {
+        GameObject zoneObject = new GameObject(objectName);
+        zoneObject.transform.SetParent(parent, false);
+        zoneObject.transform.localPosition = localPosition;
+        zoneObject.transform.localRotation = Quaternion.identity;
+        zoneObject.transform.localScale = localScale;
+
+        TabzHazeZone zone = zoneObject.AddComponent<TabzHazeZone>();
+        zone.zone = zoneKind;
+
+        TabzHazeContextData.ZoneInfo info =
+            TabzHazeContextData.GetZoneInfo(zoneKind);
+        zone.priority = info.priority;
+        zone.blendRange = info.blendRange;
     }
 
     private void SpawnZombie()
