@@ -278,24 +278,31 @@ public class OfflinePrototypeBootstrap : MonoBehaviour
         performanceStatus = MakeText("Performance Status", panel.transform, "", 15,
             new Vector2(0.12f, 0.69f), new Vector2(0.88f, 0.77f), TextAnchor.MiddleCenter);
         fogDiagnosticText = MakeText("Fog Diagnostics", panel.transform, "Verificando efeito da câmera...", 12,
-            new Vector2(0.08f, 0.51f), new Vector2(0.92f, 0.68f), TextAnchor.MiddleCenter);
+            new Vector2(0.08f, 0.55f), new Vector2(0.92f, 0.69f), TextAnchor.MiddleCenter);
         MakeButton("COPIAR DIAGNÓSTICO", panel.transform,
-            new Vector2(0.22f, 0.48f), new Vector2(0.78f, 0.55f),
+            new Vector2(0.22f, 0.49f), new Vector2(0.78f, 0.55f),
             CopyFogDiagnostic);
         MakeButton("VISUALIZAR DEPTH (TOQUE PARA VOLTAR)", panel.transform,
-            new Vector2(0.10f, 0.39f), new Vector2(0.90f, 0.46f),
+            new Vector2(0.10f, 0.42f), new Vector2(0.90f, 0.48f),
             () => { if (distanceFog != null) distanceFog.ToggleDepthDebug(); });
+        MakeButton("ESPALHAMENTO DIRECIONAL: LIGAR / DESLIGAR", panel.transform,
+            new Vector2(0.08f, 0.34f), new Vector2(0.92f, 0.40f),
+            () =>
+            {
+                if (distanceFog != null)
+                    distanceFog.SetScattering(!distanceFog.scatteringEnabled);
+            });
 
         MakeButton("ATIVAR / DESATIVAR NÉVOA", panel.transform,
-            new Vector2(0.12f, 0.27f), new Vector2(0.88f, 0.37f),
+            new Vector2(0.12f, 0.24f), new Vector2(0.88f, 0.32f),
             () => { fogEnabled = !fogEnabled; ApplyFogSettings(); });
         fogIntensityLabel = MakeText("Fog Intensity Label", panel.transform, "INTENSIDADE DA NÉVOA: 100%", 14,
-            new Vector2(0.12f, 0.205f), new Vector2(0.88f, 0.255f), TextAnchor.MiddleCenter);
+            new Vector2(0.12f, 0.18f), new Vector2(0.88f, 0.23f), TextAnchor.MiddleCenter);
         GameObject sliderObject = new GameObject("Fog Intensity Slider");
         sliderObject.transform.SetParent(panel.transform, false);
         RectTransform sliderRect = sliderObject.AddComponent<RectTransform>();
-        sliderRect.anchorMin = new Vector2(0.16f, 0.155f);
-        sliderRect.anchorMax = new Vector2(0.84f, 0.195f);
+        sliderRect.anchorMin = new Vector2(0.16f, 0.135f);
+        sliderRect.anchorMax = new Vector2(0.84f, 0.17f);
         sliderRect.offsetMin = Vector2.zero;
         sliderRect.offsetMax = Vector2.zero;
         Image sliderTrack = sliderObject.AddComponent<Image>();
