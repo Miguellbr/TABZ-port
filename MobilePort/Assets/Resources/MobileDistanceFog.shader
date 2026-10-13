@@ -22,6 +22,13 @@ Shader "Hidden/TABZ/MobileDistanceFog"
             float _FogStartDistance;
             float _CameraHeight;
             float _DebugDepth;
+            float _HazeScattering;
+            float _HazeHeightFalloff;
+            float _HazeDirection;
+            float _HazeSecondaryRatio;
+            float _ScatteringEnabled;
+            float3 _LightDirection;
+            float3 _LightColour;
 
             fixed4 frag(v2f_img i) : SV_Target
             {
