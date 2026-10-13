@@ -14,9 +14,9 @@ FILES = {
     "OfflinePrototypeZombie.cs": ["class OfflinePrototypeZombie", "TakeDamage", "IsDead"],
     "OriginalWeaponVisualBridge.cs": ["class OriginalWeaponVisualBridge", "Resources.Load<GameObject>", "OriginalTabzArmsRig", "MoveWeaponToOriginalAim"],
     "OriginalTabzArmsRig.cs": ["class OriginalTabzArmsRig", "CharacterJoint", "ConfigurableJoint", "CapsuleCollider", "SuperSlippery", "Resources.Load<Mesh>", "boneWeights", "WeaponPosition", "WeaponRightHandTag", "ReloadAimTag"],
-    "MobileDistanceFog.cs": ["class MobileDistanceFog", "TabzHazeContextData.Evaluate", '"_FogExtinction"', "SetFog(bool value)"],
+    "MobileDistanceFog.cs": ["class MobileDistanceFog", "TabzHazeContextData.Evaluate", '"_FogExtinction"', "SetFog(bool value)", "matchingZones.Sort", "GetBlendWeight", "Settings.Lerp"],
     "TabzHazeContextData.cs": ["class TabzHazeContextData", "0.015f", "0.0001f", "0.6653145f", "EvaluateNightCurve"],
-    "TabzHazeZone.cs": ["class TabzHazeZone", "Collider.ClosestPoint", "GetComponent<Collider>"],
+    "TabzHazeZone.cs": ["class TabzHazeZone", "InverseTransformPoint", "GetBlendWeight", "ComparePriorityAndSize", "blendRange"],
 }
 
 def strip_csharp_literals_and_comments(source):
@@ -93,10 +93,21 @@ for asset in required_assets:
         errors.append(f"Missing imported original weapon asset: {asset.relative_to(ROOT)}")
 
 bootstrap = (BASE / "OfflinePrototypeBootstrap.cs").read_text(encoding="utf-8")
+if "BuildOriginalHazeZones()" not in bootstrap:
+    errors.append("OfflinePrototypeBootstrap.cs: recovered original haze zones are not created")
 if "AddComponent<OriginalWeaponVisualBridge>" not in bootstrap:
     errors.append("OfflinePrototypeBootstrap.cs: original weapon visual bridge is not attached")
 if 'resourcesPrefabPath = "items/Ak74"' not in bootstrap:
     errors.append("OfflinePrototypeBootstrap.cs: expected original AK-74 Resources path is missing")
+for token in (
+    "new Vector3(-308.82278f, -317.1259f, 1399.1091f)",
+    "new Vector3(727.6909f, 317.1259f, -815.5936f)",
+    "new Vector3(2283.2312f, 1200.8811f, 2183.5205f)",
+    "new Vector3(242.87401f, 251.06976f, 264.7568f)",
+):
+    if token not in bootstrap:
+        errors.append(f"OfflinePrototypeBootstrap.cs: missing recovered haze transform {token!r}")
+
 
 offline_files = ["OfflinePrototypeBootstrap.cs", "OfflinePrototypePlayer.cs", "OfflinePrototypeWeapon.cs", "OfflinePrototypeZombie.cs"]
 for filename in offline_files:
