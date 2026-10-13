@@ -27,6 +27,8 @@ public class MobileDistanceFog : MonoBehaviour
 
     public bool fogEnabled = true;
     [Range(0f, 2f)] public float intensityMultiplier = 1f;
+    [Tooltip("Experimento mobile sem sombras em cascata; desligue se o custo/visual não compensar.")]
+    public bool scatteringEnabled = false;
 
     private void Awake()
     {
@@ -75,6 +77,12 @@ public class MobileDistanceFog : MonoBehaviour
     public void SetIntensity(float value)
     {
         intensityMultiplier = Mathf.Clamp(value, 0f, 2f);
+        ApplySettings();
+    }
+
+    public void SetScattering(bool value)
+    {
+        scatteringEnabled = value;
         ApplySettings();
     }
 
@@ -168,6 +176,30 @@ public class MobileDistanceFog : MonoBehaviour
             fogEnabled ? activeSettings.startDistance : 5f);
         fogMaterial.SetFloat("_CameraHeight", targetCamera != null
             ? targetCamera.transform.position.y : 0f);
+        fogMaterial.SetFloat("_HazeScattering",
+            0.0021f * activeSettings.hazeScatteringScale * intensityMultiplier);
+        fogMaterial.SetFloat("_HazeHeightFalloff",
+            activeSettings.hazeDensityHeightFalloff);
+        fogMaterial.SetFloat("_HazeDirection",
+            activeSettings.hazeScatteringDirection);
+        fogMaterial.SetFloat("_HazeSecondaryRatio",
+            activeSettings.hazeSecondaryScatteringRatio);
+        fogMaterial.SetFloat("_ScatteringEnabled", scatteringEnabled ? 1f : 0f);
+
+        // DeepSky uses the active directional light's direction and colour.
+        // RenderSettings.sun is the explicit source; without one, the
+        // reduced scattering contribution stays black instead of guessing.
+        Light sun = RenderSettings.sun;
+        if (sun != null && sun.type == LightType.Directional)
+        {
+            fogMaterial.SetVector("_LightDirection", -sun.transform.forward);
+            fogMaterial.SetColor("_LightColour", sun.color * sun.intensity);
+        }
+        else
+        {
+            fogMaterial.SetVector("_LightDirection", Vector3.down);
+            fogMaterial.SetColor("_LightColour", Color.black);
+        }
     }
 
     public string GetDiagnosticStatus()
