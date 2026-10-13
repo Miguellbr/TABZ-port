@@ -85,7 +85,7 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                     [unroll]
                     for (int sampleIndex = 0; sampleIndex < 8; sampleIndex++)
                     {
-                        float sampleDistance = (sampleIndex + 0.5) * stepLength;
+                        float sampleDistance = _FogStartDistance + (sampleIndex + 0.5) * stepLength;
                         float sampleHeight = _WorldSpaceCameraPos.y +
                             worldRay.y * sampleDistance;
                         float sampleDensity = exp(-_HazeHeightFalloff * sampleHeight);
