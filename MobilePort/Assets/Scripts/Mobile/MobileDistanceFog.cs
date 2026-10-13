@@ -3,8 +3,8 @@ using UnityEngine;
 
 /// <summary>
 /// Mobile Built-in Render Pipeline implementation driven by recovered TABZ
-/// DeepSky Haze context values. It reproduces the context data and a cheap
-/// depth-based extinction pass; it is not the original multi-pass PC shader.
+/// DeepSky Haze context values. It provides depth extinction and an optional
+/// reduced directional-scattering experiment; it is not the original multi-pass shader.
 /// </summary>
 [RequireComponent(typeof(Camera))]
 public class MobileDistanceFog : MonoBehaviour
@@ -223,7 +223,8 @@ public class MobileDistanceFog : MonoBehaviour
         return "Modo: " + (depthDebugEnabled ? "VISUALIZANDO DEPTH" : "névoa") +
             " | Zona: " + activeZone +
             " | Hora normalizada: " + normalizedDayTime.ToString("0.000") +
-            " | Intensidade: " + (intensityMultiplier * 100f).ToString("0") + "%"
+            " | Intensidade: " + (intensityMultiplier * 100f).ToString("0") + "%" +
+            " | Espalhamento: " + (scatteringEnabled ? "ativo" : "desativado")
             + " | Extinção: " + (activeSettings.extinction * intensityMultiplier).ToString("0.0000") +
             " | Densidade vertical: " + activeSettings.heightFalloff.ToString("0.0000") +
             " | Câmera: " + (targetCamera != null ? "OK" : "ausente") +
