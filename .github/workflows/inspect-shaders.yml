@@ -67,7 +67,7 @@ jobs:
                               target = target_dir / f"{safe}_{obj.path_id}.shader"
                               target.write_text(source, encoding="utf-8", errors="replace")
                               dxbc_count = 0
-                              if name in ("Hidden/DS_Haze", "Hidden/DS_HazeLightVolume", "Hidden/Post FX/Fog"):
+                              if name in ("Hidden/DS_Haze", "Hidden/DS_HazeLightVolume", "Hidden/Post FX/Fog", "Skybox/Gradient Skybox"):
                                   for platform_index, platform in enumerate(shader.platforms):
                                       if platform != 4:
                                           continue
@@ -147,7 +147,7 @@ jobs:
           $exe = Get-ChildItem -Path $dir -Filter "fxcd.exe" -Recurse | Select-Object -First 1
           if (-not $exe) { throw "fxcd.exe was not found in the release archive" }
           "FXCD_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Decompile original DeepSky DXBC programs
+      - name: Decompile original DeepSky and skybox DXBC programs
         shell: pwsh
         run: |
           $files = Get-ChildItem -Path "artifact/raw-dxbc" -Filter "*.bin" -Recurse
@@ -169,6 +169,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: tabz-decompiled-haze-hlsl
+          name: tabz-decompiled-atmosphere-and-skybox-hlsl
           path: artifact/raw-dxbc/
           retention-days: 14
