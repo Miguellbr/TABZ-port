@@ -101,6 +101,7 @@ Shader "Hidden/TABZ/MobileDistanceFog"
                 // pass rather than applying a screen-wide colour wash.
                 fogAmount *= (1.0 - isSky);
                 scene.rgb = lerp(scene.rgb, _FogColor.rgb, fogAmount);
+                scene.rgb += hazeRadiance * (1.0 - isSky);
                 return scene;
             }
             ENDCG
