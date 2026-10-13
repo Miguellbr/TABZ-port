@@ -63,9 +63,17 @@ public class MobileDistanceFog : MonoBehaviour
     {
         UpdateDirectionalLight();
 
+        // Camera height affects the original height-dependent atmosphere.
+        // Keep it current even when the selected context does not change.
+        if (fogMaterial != null)
+            fogMaterial.SetFloat("_CameraHeight", targetCamera.transform.position.y);
+
         if (Time.unscaledTime >= nextContextRefresh)
         {
             nextContextRefresh = Time.unscaledTime + 0.25f;
+            // Refresh the registry periodically so zones created or removed
+            // at runtime are reflected without requiring a scene reload.
+            zones = FindObjectsOfType<TabzHazeZone>();
             RefreshContext(false);
         }
     }
@@ -154,14 +162,45 @@ public class MobileDistanceFog : MonoBehaviour
             }
         }
 
+        // The selected zone alone is not a sufficient cache key:
+        // edge blending changes continuously while the camera remains inside
+        // the same set of zones. Compare the evaluated settings instead.
         if (!force && selectedZone == activeZone &&
-            Mathf.Approximately(lastAppliedTime, normalizedDayTime))
+            SettingsApproximatelyEqual(activeSettings, nextSettings))
             return;
 
         activeZone = selectedZone;
         activeSettings = nextSettings;
         lastAppliedTime = normalizedDayTime;
         ApplySettings();
+    }
+
+    private static bool SettingsApproximatelyEqual(
+        TabzHazeContextData.Settings a,
+        TabzHazeContextData.Settings b)
+    {
+        return Mathf.Approximately(a.airScatteringScale, b.airScatteringScale) &&
+            Mathf.Approximately(a.airDensityHeightFalloff, b.airDensityHeightFalloff) &&
+            Mathf.Approximately(a.hazeScatteringScale, b.hazeScatteringScale) &&
+            Mathf.Approximately(a.hazeDensityHeightFalloff, b.hazeDensityHeightFalloff) &&
+            Mathf.Approximately(a.hazeScatteringDirection, b.hazeScatteringDirection) &&
+            Mathf.Approximately(a.hazeSecondaryScatteringRatio, b.hazeSecondaryScatteringRatio) &&
+            Mathf.Approximately(a.extinction, b.extinction) &&
+            Mathf.Approximately(a.heightFalloff, b.heightFalloff) &&
+            Mathf.Approximately(a.fogScatteringScale, b.fogScatteringScale) &&
+            Mathf.Approximately(a.fogScatteringDirection, b.fogScatteringDirection) &&
+            Approximately(a.ambient, b.ambient) &&
+            Approximately(a.lightColour, b.lightColour) &&
+            Mathf.Approximately(a.opacity, b.opacity) &&
+            Mathf.Approximately(a.startDistance, b.startDistance);
+    }
+
+    private static bool Approximately(Color a, Color b)
+    {
+        return Mathf.Approximately(a.r, b.r) &&
+            Mathf.Approximately(a.g, b.g) &&
+            Mathf.Approximately(a.b, b.b) &&
+            Mathf.Approximately(a.a, b.a);
     }
 
     private void ApplySettings()
