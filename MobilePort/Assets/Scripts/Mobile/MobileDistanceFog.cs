@@ -169,6 +169,15 @@ public class MobileDistanceFog : MonoBehaviour
             Graphics.Blit(source, destination);
             return;
         }
+
+        // A zero-intensity setting is a true bypass, not merely zero extinction.
+        // Keep the depth diagnostic available even when the fog slider is at 0%.
+        if (intensityMultiplier <= 0f && !depthDebugEnabled)
+        {
+            Graphics.Blit(source, destination);
+            return;
+        }
+
         Graphics.Blit(source, destination, fogMaterial);
     }
 
