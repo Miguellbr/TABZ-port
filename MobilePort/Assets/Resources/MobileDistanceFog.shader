@@ -44,7 +44,8 @@ Shader "Hidden/TABZ/MobileDistanceFog"
   {
    float raw = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
    float eye = LinearEyeDepth(raw);
-   if (IsSkyDepth(raw) > 0.5) return float4(0,0,0,_ViewportFarClip);
+   if (IsSkyDepth(raw) > 0.5) return float4(0,0,0,1.0);
+   if (_ScatteringEnabled < 0.5) return float4(0,0,0,saturate(eye / max(_ViewportFarClip,0.001)));
    float3 ray = ViewportRay(i.uv), dir = normalize(ray);
    float rayLength = eye * length(ray);
    float begin = min(_FogStartDistance, rayLength);
@@ -60,7 +61,7 @@ Shader "Hidden/TABZ/MobileDistanceFog"
     radiance += _LightColour * phase * max(_HazeScattering, 0.0) *
      saturate(_HazeSecondaryRatio) * density * (segment / 16.0);
    }
-   return float4(radiance, eye);
+   return float4(radiance, saturate(eye / max(_ViewportFarClip,0.001)));
   }
   float4 BlurAxis(float2 uv, float2 axis)
   {
@@ -101,7 +102,7 @@ Shader "Hidden/TABZ/MobileDistanceFog"
    float4 r1=tex2D(_RadianceBuffer,baseUV+float2(texel.x,0));
    float4 r2=tex2D(_RadianceBuffer,baseUV+float2(0,texel.y));
    float4 r3=tex2D(_RadianceBuffer,baseUV+texel);
-   float e0=abs(r0.a-eye),e1=abs(r1.a-eye),e2=abs(r2.a-eye),e3=abs(r3.a-eye);
+   float e0=abs(r0.a*_ViewportFarClip-eye),e1=abs(r1.a*_ViewportFarClip-eye),e2=abs(r2.a*_ViewportFarClip-eye),e3=abs(r3.a*_ViewportFarClip-eye);
    float3 directionalRadiance=r0.rgb; float closest=e0;
    if(e1<closest){closest=e1;directionalRadiance=r1.rgb;}
    if(e2<closest){closest=e2;directionalRadiance=r2.rgb;}
