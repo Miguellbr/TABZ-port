@@ -7,8 +7,8 @@ Shader "Hidden/TABZ/MobileDistanceFog"
   #include "UnityCG.cginc"
   sampler2D _MainTex, _RadianceBuffer;
   UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
-  float4 _MainTex_TexelSize, _RadianceBuffer_TexelSize, _FogColor;
-  float _FogExtinction, _FogHeightFalloff, _FogOpacity, _FogStartDistance, _DebugDepth, _ViewportFarClip;
+  float4 _MainTex_TexelSize, _RadianceBuffer_TexelSize, _CameraDepthTexture_TexelSize, _FogColor;
+  float _FogExtinction, _FogHeightFalloff, _FogOpacity, _FogStartDistance, _DebugDepth, _ViewportFarClip, _SamplingFalloff;
   float3 _ViewportCorner, _ViewportRight, _ViewportUp;
   float _HazeScattering, _HazeHeightFalloff, _HazeDirection, _HazeSecondaryRatio;
   float _AirScatteringScale, _AirHeightFalloff, _FogScatteringScale, _FogScatteringDirection, _ScatteringEnabled;
@@ -42,10 +42,16 @@ Shader "Hidden/TABZ/MobileDistanceFog"
   }
   float4 fragRadiance(v2f_img i) : SV_Target
   {
-   float raw = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+   float2 depthOffset = _CameraDepthTexture_TexelSize.xy * 0.5;
+   float raw0 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + float2(-depthOffset.x, -depthOffset.y));
+   float raw1 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + float2(depthOffset.x, -depthOffset.y));
+   float raw2 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + float2(-depthOffset.x, depthOffset.y));
+   float raw3 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + depthOffset);
+   // Original DS_DEPTHDOWNSAMPLE writes the maximum of four raw depth samples.
+   float raw = max(max(raw0, raw1), max(raw2, raw3));
    float eye = LinearEyeDepth(raw);
    if (IsSkyDepth(raw) > 0.5) return float4(0,0,0,1.0);
-   if (_ScatteringEnabled < 0.5) return float4(0,0,0,saturate(eye / max(_ViewportFarClip,0.001)));
+   if (_ScatteringEnabled < 0.5) return float4(0,0,0,eye);
    float3 ray = ViewportRay(i.uv), dir = normalize(ray);
    float rayLength = eye * length(ray);
    float begin = min(_FogStartDistance, rayLength);
@@ -61,7 +67,7 @@ Shader "Hidden/TABZ/MobileDistanceFog"
     radiance += _LightColour * phase * max(_HazeScattering, 0.0) *
      saturate(_HazeSecondaryRatio) * density * (segment / 16.0);
    }
-   return float4(radiance, saturate(eye / max(_ViewportFarClip,0.001)));
+   return float4(radiance, eye);
   }
   float4 BlurAxis(float2 uv, float2 axis)
   {
@@ -69,12 +75,14 @@ Shader "Hidden/TABZ/MobileDistanceFog"
    float2 delta = _MainTex_TexelSize.xy * axis;
    float4 a=tex2D(_MainTex,uv-delta*2.0), b=tex2D(_MainTex,uv-delta);
    float4 c=tex2D(_MainTex,uv+delta), d=tex2D(_MainTex,uv+delta*2.0);
-   float depth=max(center.a,0.001);
-   float wa=exp(-abs(a.a-center.a)/depth)*0.0625;
-   float wb=exp(-abs(b.a-center.a)/depth)*0.25;
+   float da = a.a - center.a, db = b.a - center.a;
+   float dc = c.a - center.a, dd = d.a - center.a;
+   // Original DS_Haze uses exp(-GaussianDepthFalloff * depthDifference^2).
+   float wa=exp(-_SamplingFalloff*da*da)*0.0625;
+   float wb=exp(-_SamplingFalloff*db*db)*0.25;
    float wc=0.375;
-   float wd=exp(-abs(d.a-center.a)/depth)*0.0625;
-   float we=exp(-abs(c.a-center.a)/depth)*0.25;
+   float wd=exp(-_SamplingFalloff*dd*dd)*0.0625;
+   float we=exp(-_SamplingFalloff*dc*dc)*0.25;
    float total=wa+wb+wc+wd+we;
    return float4((a.rgb*wa+b.rgb*wb+center.rgb*wc+c.rgb*we+d.rgb*wd)/max(total,0.00001),center.a);
   }
@@ -102,7 +110,7 @@ Shader "Hidden/TABZ/MobileDistanceFog"
    float4 r1=tex2D(_RadianceBuffer,baseUV+float2(texel.x,0));
    float4 r2=tex2D(_RadianceBuffer,baseUV+float2(0,texel.y));
    float4 r3=tex2D(_RadianceBuffer,baseUV+texel);
-   float e0=abs(r0.a*_ViewportFarClip-eye),e1=abs(r1.a*_ViewportFarClip-eye),e2=abs(r2.a*_ViewportFarClip-eye),e3=abs(r3.a*_ViewportFarClip-eye);
+   float e0=abs(r0.a-eye),e1=abs(r1.a-eye),e2=abs(r2.a-eye),e3=abs(r3.a-eye);
    float3 directionalRadiance=r0.rgb; float closest=e0;
    if(e1<closest){closest=e1;directionalRadiance=r1.rgb;}
    if(e2<closest){closest=e2;directionalRadiance=r2.rgb;}
