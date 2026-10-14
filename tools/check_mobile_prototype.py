@@ -184,7 +184,7 @@ else:
 
 # The camera ray basis must reproduce the recovered original DS_HazeView formula.
 camera_source = (BASE / "MobileDistanceFog.cs").read_text(encoding="utf-8")
-for token in ("UpdateOriginalViewportRays", "targetCamera.fieldOfView", "targetCamera.aspect", "targetCamera.farClipPlane", '"_ViewportCorner"', '"_ViewportRight"', '"_ViewportUp"', '"_ViewportFarClip"', "cameraTransform.forward", "cameraTransform.right", "cameraTransform.up"):
+for token in ("UpdateOriginalViewportRays", "targetCamera.fieldOfView", "targetCamera.aspect", "targetCamera.farClipPlane", '"_ViewportCorner"', '"_ViewportRight"', '"_ViewportUp"', '"_ViewportFarClip"', "t.forward", "t.right", "t.up"):
     if token not in camera_source:
         errors.append(f"MobileDistanceFog.cs: missing original viewport-ray contract {token!r}")
 
