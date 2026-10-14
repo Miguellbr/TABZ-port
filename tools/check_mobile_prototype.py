@@ -217,7 +217,7 @@ for token in ("Graphics.Blit(source, radiance, fogMaterial, 0)",
         errors.append(f"MobileDistanceFog.cs: missing multi-pass render step {token!r}")
 
 # Check the recovered bilateral-depth constants and linear-depth contract.
-mobile_fog_shader = (BASE.parent / "Resources" / "MobileDistanceFog.shader").read_text(encoding="utf-8")
+mobile_fog_shader = (BASE.parents[1] / "Resources" / "MobileDistanceFog.shader").read_text(encoding="utf-8")
 for token in ("_SamplingFalloff", "exp(-_SamplingFalloff*da*da)",
               "float raw = max(max(raw0, raw1), max(raw2, raw3));",
               "return float4(radiance, eye);",
