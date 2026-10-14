@@ -124,7 +124,15 @@ if not haze_shader.is_file():
     errors.append("Missing mobile haze shader")
 else:
     shader_source = haze_shader.read_text(encoding="utf-8")
-    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth", "exp(-opticalDepth)", "_HazeScattering", "_HazeHeightFalloff", "_HazeDirection", "_HazeSecondaryRatio", "_AirScatteringScale", "_AirHeightFalloff", "_FogScatteringScale", "_FogScatteringDirection", "_ScatteringEnabled", "_LightDirection", "_LightColour", "_ViewportCorner", "_ViewportRight", "_ViewportUp", "_ViewportFarClip", "_MainTex_TexelSize.y < 0.0", "IntegrateExponentialDensity", "fogDensityIntegral", "airIntegral", "hazeIntegral", "atmosphereRadiance", "(1.0 - saturate(_HazeSecondaryRatio))"):
+    for token in ("_FogExtinction", "_FogHeightFalloff", "_FogOpacity", "LinearEyeDepth",
+                  "_HazeScattering", "_HazeHeightFalloff", "_HazeDirection", "_HazeSecondaryRatio",
+                  "_AirScatteringScale", "_AirHeightFalloff", "_FogScatteringScale",
+                  "_FogScatteringDirection", "_ScatteringEnabled", "_LightDirection", "_LightColour",
+                  "_ViewportCorner", "_ViewportRight", "_ViewportUp", "_ViewportFarClip",
+                  "_MainTex_TexelSize.y < 0.0", "IntegrateExponentialDensity",
+                  "airIntegral", "hazeIntegral", "directionalRadiance",
+                  "sampleIndex <= 15", "fragRadiance", "fragBlurHorizontal",
+                  "fragBlurVertical", "fragComposite", "closest"):
         if token not in shader_source:
             errors.append(f"MobileDistanceFog.shader: missing expected token {token!r}")
     for forbidden in ("_FogEnd", "_SkyFogStrength"):
@@ -196,6 +204,17 @@ else:
 environment_source = (BASE / "OriginalTabzEnvironment.cs").read_text(encoding="utf-8")
 if "AmbientMode.Skybox" not in environment_source:
     errors.append("OriginalTabzEnvironment.cs: original TABZ_World skybox ambient mode is not applied")
+
+# The mobile haze must execute all four passes with temporary half-resolution targets.
+mobile_fog_source = (BASE / "MobileDistanceFog.cs").read_text(encoding="utf-8")
+for token in ("Graphics.Blit(source, radiance, fogMaterial, 0)",
+              "Graphics.Blit(radiance, blur, fogMaterial, 1)",
+              "Graphics.Blit(blur, radiance, fogMaterial, 2)",
+              "Graphics.Blit(source, destination, fogMaterial, 3)",
+              "RenderTexture.ReleaseTemporary(radiance)",
+              "RenderTexture.ReleaseTemporary(blur)"):
+    if token not in mobile_fog_source:
+        errors.append(f"MobileDistanceFog.cs: missing multi-pass render step {token!r}")
 
 if errors:
     print("\n".join("ERROR: " + e for e in errors))
