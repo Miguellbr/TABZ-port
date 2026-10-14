@@ -131,14 +131,13 @@ The vertex program constructs the world-space ray from _ViewportCorner, _Viewpor
 
 ### Consequence for the Android implementation
 
-The original directional radiance is shadow-aware volumetric integration, not simply a sun-coloured gradient or a radial blur. Reproducing it faithfully requires access to the active directional light's shadow map/cascade data and a compatible comparison-sampling path. Unity's ordinary mobile Light API does not expose the built-in shadow-cascade atlas and matrices to an arbitrary OnRenderImage effect as a stable cross-backend contract.
+The original directional radiance is shadow-aware volumetric integration, not simply a sun-coloured gradient or a radial blur. The recovered `DS_HazeView` C# source shows the exact Built-in Render Pipeline scheduling:
 
-Therefore, do not implement this pass by inventing shadow matrices or by sampling an unrelated screen-space shadow texture. The safe next options are:
+- attach a command buffer to the directional light at `LightEvent.AfterShadowMap` and bind `BuiltinRenderTextureType.CurrentActive` as `_ShadowCascades`;
+- attach the radiance blit to `LightEvent.AfterScreenspaceMask`, where the Unity shadow cascade constant buffer is available;
+- let the shader select among the four cascade split spheres/radii and world-to-shadow matrices, then perform its 15 comparison samples.
 
-- use a dedicated render feature/custom shadow-caster path that owns its shadow texture and matrices (more work, but controllable); or
-- start with a deliberately reduced non-shadowed radiance approximation, clearly labelled as such, and compare it visually before investing in cascade parity.
-
-For the low-end Android target, the second option is the more practical first experiment. It must remain optional and should not replace the current safe fog fallback until the radiance buffer, depth inputs and composite are all valid. This is a design decision, not an implemented or device-tested change.
+This corrects the earlier assumption that the cascade data could not be obtained through the Built-in pipeline. It is not available as a reliable texture/matrix pair to an arbitrary `OnRenderImage` blit, but the original light-event command-buffer route is directly evidenced by the recovered source and is the correct route to reproduce. The Android implementation still needs to wire and validate that scheduling and the comparison-sampling shader on the target graphics backend.
 
 ## 9. Evidence and limits
 
