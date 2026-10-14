@@ -189,7 +189,7 @@ public class MobileDistanceFog : MonoBehaviour
             (targetCamera.depthTextureMode & DepthTextureMode.Depth) != 0;
         string shader = !shaderFound ? "não" :
             (fogMaterial != null && fogMaterial.shader.isSupported ? "OK" : "erro");
-        return "Pipeline: radiância 1/2 + blur bilateral (falloff original 500; kernel espacial mobile) + composite | Zona: " +
+        return "Pipeline: radiância 1/2 + blur bilateral original (15 taps; falloff 500) + composite | Zona: " +
             activeZone + " | Intensidade: " + (intensityMultiplier * 100f).ToString("0") +
             "% | Espalhamento: " + (scatteringEnabled ? "ativo" : "desativado") +
             " | Shader: " + shader + " | Depth: " + (depth ? "solicitado" : "não") +
