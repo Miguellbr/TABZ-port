@@ -43,12 +43,12 @@ Shader "Hidden/TABZ/MobileDistanceFog"
   float4 fragRadiance(v2f_img i) : SV_Target
   {
    float2 depthOffset = _CameraDepthTexture_TexelSize.xy * 0.5;
-   float raw0 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + float2(-depthOffset.x, -depthOffset.y));
-   float raw1 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + float2(depthOffset.x, -depthOffset.y));
-   float raw2 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + float2(-depthOffset.x, depthOffset.y));
-   float raw3 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv + depthOffset);
-   // Original DS_DEPTHDOWNSAMPLE writes the maximum of four raw depth samples.
-   float raw = max(max(raw0, raw1), max(raw2, raw3));
+   float raw0 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture,
+    i.uv + float2(-depthOffset.x, depthOffset.y));
+   float raw1 = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture,
+    i.uv + float2(-depthOffset.x, -depthOffset.y));
+   // Match the two depth taps retained by the original DXBC depth-downsample program.
+   float raw = max(raw0, raw1);
    float eye = LinearEyeDepth(raw);
    if (IsSkyDepth(raw) > 0.5) return float4(0,0,0,1.0);
    if (_ScatteringEnabled < 0.5) return float4(0,0,0,eye);
@@ -69,22 +69,37 @@ Shader "Hidden/TABZ/MobileDistanceFog"
    }
    return float4(radiance, eye);
   }
+  void AddBlurTap(float2 uv, float centerDepth, float spatialWeight,
+   inout float3 accumulated, inout float weightSum)
+  {
+   float4 sampleValue = tex2D(_MainTex, uv);
+   float depthDelta = abs(sampleValue.a - centerDepth);
+   float weight = spatialWeight * exp(-_SamplingFalloff * depthDelta * depthDelta);
+   accumulated += sampleValue.rgb * weight;
+   weightSum += weight;
+  }
   float4 BlurAxis(float2 uv, float2 axis)
   {
-   float4 center = tex2D(_MainTex,uv);
+   float4 center = tex2D(_MainTex, uv);
    float2 delta = _MainTex_TexelSize.xy * axis;
-   float4 a=tex2D(_MainTex,uv-delta*2.0), b=tex2D(_MainTex,uv-delta);
-   float4 c=tex2D(_MainTex,uv+delta), d=tex2D(_MainTex,uv+delta*2.0);
-   float da = a.a - center.a, db = b.a - center.a;
-   float dc = c.a - center.a, dd = d.a - center.a;
-   // Original DS_Haze uses exp(-GaussianDepthFalloff * depthDifference^2).
-   float wa=exp(-_SamplingFalloff*da*da)*0.0625;
-   float wb=exp(-_SamplingFalloff*db*db)*0.25;
-   float wc=0.375;
-   float wd=exp(-_SamplingFalloff*dd*dd)*0.0625;
-   float we=exp(-_SamplingFalloff*dc*dc)*0.25;
-   float total=wa+wb+wc+wd+we;
-   return float4((a.rgb*wa+b.rgb*wb+center.rgb*wc+c.rgb*we+d.rgb*wd)/max(total,0.00001),center.a);
+   float3 accumulated = center.rgb * 0.144464448;
+   float weightSum = 0.144464448;
+   // Exact 15-tap separable spatial coefficients recovered from DXBC.
+   AddBlurTap(uv + delta, center.a, 0.144464448, accumulated, weightSum);
+   AddBlurTap(uv - delta, center.a, 0.144464448, accumulated, weightSum);
+   AddBlurTap(uv + delta * 2.0, center.a, 0.11153505, accumulated, weightSum);
+   AddBlurTap(uv - delta * 2.0, center.a, 0.11153505, accumulated, weightSum);
+   AddBlurTap(uv + delta * 3.0, center.a, 0.0805530921, accumulated, weightSum);
+   AddBlurTap(uv - delta * 3.0, center.a, 0.0805530921, accumulated, weightSum);
+   AddBlurTap(uv + delta * 4.0, center.a, 0.0508756414, accumulated, weightSum);
+   AddBlurTap(uv - delta * 4.0, center.a, 0.0508756414, accumulated, weightSum);
+   AddBlurTap(uv + delta * 5.0, center.a, 0.0279815998, accumulated, weightSum);
+   AddBlurTap(uv - delta * 5.0, center.a, 0.0279815998, accumulated, weightSum);
+   AddBlurTap(uv + delta * 6.0, center.a, 0.0133245699, accumulated, weightSum);
+   AddBlurTap(uv - delta * 6.0, center.a, 0.0133245699, accumulated, weightSum);
+   AddBlurTap(uv + delta * 7.0, center.a, 0.00545095978, accumulated, weightSum);
+   AddBlurTap(uv - delta * 7.0, center.a, 0.00545095978, accumulated, weightSum);
+   return float4(accumulated / max(weightSum, 0.00001), center.a);
   }
   float4 fragBlurHorizontal(v2f_img i):SV_Target{return BlurAxis(i.uv,float2(1,0));}
   float4 fragBlurVertical(v2f_img i):SV_Target{return BlurAxis(i.uv,float2(0,1));}
