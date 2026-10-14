@@ -84,7 +84,7 @@ The horizontal pass offsets along the X axis; the vertical pass offsets along Y.
 ## 5. Depth passes
 
 - The depth-grab pixel program copies the sampled camera depth into the red channel.
-- The depth-downsample pixel program samples four half-texel-offset positions and writes the maximum raw depth. This is the exact compiled behavior; do not replace it with an assumed average.
+- The depth-downsample pixel program's effective output is the maximum of two diagonal half-texel-offset raw-depth samples. The decompiler shows two additional fetches whose values do not feed the output. This is the compiled output behavior; do not replace it with an assumed average.
 
 ## 6. What this means for the Android port
 
