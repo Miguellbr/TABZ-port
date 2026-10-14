@@ -26,6 +26,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: gh run download 38301772658 --repo Miguellbr/TABZ-port --name tabz-original-shader-report --dir original-report
+      - name: Download recovered DeepSky C# mapping artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh run download 38304981439 --repo Miguellbr/TABZ-port --name tabz-deepsky-haze-mapping --dir haze-mapping
       - name: Print original ShaderLab metadata
         shell: pwsh
         run: |
@@ -42,7 +47,12 @@ jobs:
         run: |
           $targets = @(
             "version-2/Hidden_DS_Haze/platform-4/program-1-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_DS_Haze/platform-4/program-3-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_DS_Haze/platform-4/program-4-kShaderGpuProgramDX11PixelSM40.hlsl",
             "version-2/Hidden_DS_Haze/platform-4/program-36-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_DS_Haze/platform-4/program-37-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_DS_Haze/platform-4/program-68-kShaderGpuProgramDX11PixelSM40.hlsl",
+            "version-2/Hidden_DS_Haze/platform-4/program-70-kShaderGpuProgramDX11PixelSM40.hlsl",
             "version-2/Hidden_DS_HazeLightVolume/platform-4/program-32-kShaderGpuProgramDX11PixelSM40.hlsl",
             "version-2/Hidden_Post_FX_Fog/platform-4/program-1-kShaderGpuProgramDX11PixelSM40.hlsl"
           )
@@ -56,4 +66,14 @@ jobs:
               Write-Host "MISSING $relative"
               Get-ChildItem -Path "decompiled" -Recurse -Filter "*.hlsl" | Select-Object -First 20 -ExpandProperty FullName
             }
+          }
+
+      - name: Print recovered DS_HazeView source
+        shell: pwsh
+        run: |
+          $targets = Get-ChildItem -Path "haze-mapping" -Recurse -Filter "DeepSky.Haze.DS_HazeView.cs"
+          foreach ($file in $targets) {
+            Write-Host "===== BEGIN DS_HAZEVIEW $($file.FullName) ====="
+            Get-Content -Raw $file.FullName
+            Write-Host "===== END DS_HAZEVIEW $($file.FullName) ====="
           }
