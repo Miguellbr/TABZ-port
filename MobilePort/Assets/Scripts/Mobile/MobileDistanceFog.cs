@@ -147,6 +147,8 @@ public class MobileDistanceFog : MonoBehaviour
     private void ApplySettings()
     {
         if (fogMaterial == null) return;
+        // DS_HazeView's original m_GaussianDepthFalloff default (_SamplingParams.x).
+        fogMaterial.SetFloat("_SamplingFalloff", 500f);
         fogMaterial.SetColor("_FogColor", activeSettings.ambient);
         fogMaterial.SetFloat("_FogExtinction", activeSettings.extinction * intensityMultiplier);
         fogMaterial.SetFloat("_FogHeightFalloff", activeSettings.heightFalloff);
@@ -187,7 +189,7 @@ public class MobileDistanceFog : MonoBehaviour
             (targetCamera.depthTextureMode & DepthTextureMode.Depth) != 0;
         string shader = !shaderFound ? "não" :
             (fogMaterial != null && fogMaterial.shader.isSupported ? "OK" : "erro");
-        return "Pipeline: radiância 1/2 + blur bilateral aproximado + composite | Zona: " +
+        return "Pipeline: radiância 1/2 + blur bilateral (falloff original 500; kernel espacial mobile) + composite | Zona: " +
             activeZone + " | Intensidade: " + (intensityMultiplier * 100f).ToString("0") +
             "% | Espalhamento: " + (scatteringEnabled ? "ativo" : "desativado") +
             " | Shader: " + shader + " | Depth: " + (depth ? "solicitado" : "não") +
