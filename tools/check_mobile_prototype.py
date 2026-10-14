@@ -218,8 +218,8 @@ for token in ("Graphics.Blit(source, radiance, fogMaterial, 0)",
 
 # Check the recovered bilateral-depth constants and linear-depth contract.
 mobile_fog_shader = (BASE.parents[1] / "Resources" / "MobileDistanceFog.shader").read_text(encoding="utf-8")
-for token in ("_SamplingFalloff", "exp(-_SamplingFalloff*da*da)",
-              "float raw = max(max(raw0, raw1), max(raw2, raw3));",
+for token in ("_SamplingFalloff", "exp(-_SamplingFalloff * depthDelta * depthDelta)",
+              "float raw = max(raw0, raw1);",
               "return float4(radiance, eye);",
               "float e0=abs(r0.a-eye)"):
     if token not in mobile_fog_shader:
