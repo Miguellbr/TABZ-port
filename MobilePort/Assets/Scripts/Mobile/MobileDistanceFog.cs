@@ -2,9 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Mobile Built-in Render Pipeline implementation driven by recovered TABZ
-/// DeepSky Haze context values. It provides depth extinction and an optional
-/// reduced directional-scattering experiment; it is not the original multi-pass shader.
+/// Four-pass mobile approximation of TABZ DeepSky Haze. It generates
+/// half-resolution directional radiance, filters it with depth awareness,
+/// then composites with full-resolution camera colour and depth.
+/// Cascaded shadows and temporal accumulation are not implemented.
 /// </summary>
 [RequireComponent(typeof(Camera))]
 public class MobileDistanceFog : MonoBehaviour
@@ -20,21 +21,17 @@ public class MobileDistanceFog : MonoBehaviour
     private TabzHazeZone[] zones;
     private readonly List<TabzHazeZone> matchingZones = new List<TabzHazeZone>(8);
     private float nextContextRefresh;
-    private float lastAppliedTime = -1f;
 
-    [Range(0f, 1f)]
-    public float normalizedDayTime = 0.5f;
-
+    [Range(0f, 1f)] public float normalizedDayTime = 0.5f;
     public bool fogEnabled = true;
     [Range(0f, 2f)] public float intensityMultiplier = 1f;
-    [Tooltip("Experimento mobile sem sombras em cascata; desligue se o custo/visual não compensar.")]
+    [Tooltip("Espalhamento mobile aproximado, sem sombras em cascata.")]
     public bool scatteringEnabled = false;
 
     private void Awake()
     {
         targetCamera = GetComponent<Camera>();
         targetCamera.depthTextureMode |= DepthTextureMode.Depth;
-
         Shader shader = Resources.Load<Shader>("MobileDistanceFog");
         if (shader == null)
         {
@@ -43,7 +40,6 @@ public class MobileDistanceFog : MonoBehaviour
             enabled = false;
             return;
         }
-
         shaderFound = true;
         if (!shader.isSupported)
         {
@@ -52,9 +48,7 @@ public class MobileDistanceFog : MonoBehaviour
             enabled = false;
             return;
         }
-
-        fogMaterial = new Material(shader);
-        fogMaterial.hideFlags = HideFlags.HideAndDontSave;
+        fogMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
         zones = FindObjectsOfType<TabzHazeZone>();
         RefreshContext(true);
     }
@@ -62,46 +56,26 @@ public class MobileDistanceFog : MonoBehaviour
     private void Update()
     {
         UpdateDirectionalLight();
-
-        // Camera height affects the original height-dependent atmosphere.
-        // Keep it current even when the selected context does not change.
-        if (fogMaterial != null)
-            fogMaterial.SetFloat("_CameraHeight", targetCamera.transform.position.y);
-
         if (Time.unscaledTime >= nextContextRefresh)
         {
             nextContextRefresh = Time.unscaledTime + 0.25f;
-            // Refresh the registry periodically so zones created or removed
-            // at runtime are reflected without requiring a scene reload.
             zones = FindObjectsOfType<TabzHazeZone>();
             RefreshContext(false);
         }
     }
 
-    public void SetFog(bool value)
-    {
-        fogEnabled = value;
-        ApplySettings();
-    }
-
+    public void SetFog(bool value) { fogEnabled = value; ApplySettings(); }
     public void SetIntensity(float value)
     {
         intensityMultiplier = Mathf.Clamp(value, 0f, 2f);
         ApplySettings();
     }
-
-    public void SetScattering(bool value)
-    {
-        scatteringEnabled = value;
-        ApplySettings();
-    }
-
+    public void SetScattering(bool value) { scatteringEnabled = value; ApplySettings(); }
     public void SetContextTime(float value)
     {
         normalizedDayTime = Mathf.Clamp01(value);
         RefreshContext(true);
     }
-
     public void ToggleDepthDebug()
     {
         depthDebugEnabled = !depthDebugEnabled;
@@ -112,72 +86,42 @@ public class MobileDistanceFog : MonoBehaviour
     private void RefreshContext(bool force)
     {
         if (targetCamera == null || fogMaterial == null) return;
-
         if (zones == null) zones = FindObjectsOfType<TabzHazeZone>();
-
-        Vector3 cameraPosition = targetCamera.transform.position;
+        Vector3 position = targetCamera.transform.position;
         matchingZones.Clear();
-
         for (int i = 0; i < zones.Length; i++)
-        {
-            TabzHazeZone candidate = zones[i];
-            if (candidate != null && candidate.Contains(cameraPosition))
-                matchingZones.Add(candidate);
-        }
+            if (zones[i] != null && zones[i].Contains(position)) matchingZones.Add(zones[i]);
 
-        TabzHazeContextData.Settings nextSettings;
-        TabzHazeContextData.ZoneKind selectedZone;
-
+        TabzHazeContextData.Settings next;
+        TabzHazeContextData.ZoneKind selected;
         if (matchingZones.Count == 0)
         {
-            // The offline sandbox has a general-context fallback if no
-            // recovered zone marker is present in a scene.
-            selectedZone = TabzHazeContextData.ZoneKind.General;
-            nextSettings = TabzHazeContextData.Evaluate(
-                selectedZone, normalizedDayTime);
+            selected = TabzHazeContextData.ZoneKind.General;
+            next = TabzHazeContextData.Evaluate(selected, normalizedDayTime);
         }
         else
         {
-            // DS_HazeCore sorts by ascending priority, then ascending zone
-            // size. It starts with the first context and sequentially blends
-            // every later overlapping zone using that zone's edge weight.
             matchingZones.Sort(TabzHazeZone.ComparePriorityAndSize);
-
-            TabzHazeZone firstZone = matchingZones[0];
-            selectedZone = firstZone.zone;
-            nextSettings = TabzHazeContextData.Evaluate(
-                firstZone.zone, normalizedDayTime);
-
+            selected = matchingZones[0].zone;
+            next = TabzHazeContextData.Evaluate(selected, normalizedDayTime);
             for (int i = 1; i < matchingZones.Count; i++)
             {
-                TabzHazeZone overlayZone = matchingZones[i];
-                float blendWeight = overlayZone.GetBlendWeight(cameraPosition);
-                TabzHazeContextData.Settings overlaySettings =
-                    TabzHazeContextData.Evaluate(
-                        overlayZone.zone, normalizedDayTime);
-
-                nextSettings = TabzHazeContextData.Settings.Lerp(
-                    nextSettings, overlaySettings, blendWeight);
-                selectedZone = overlayZone.zone;
+                TabzHazeZone zone = matchingZones[i];
+                next = TabzHazeContextData.Settings.Lerp(next,
+                    TabzHazeContextData.Evaluate(zone.zone, normalizedDayTime),
+                    zone.GetBlendWeight(position));
+                selected = zone.zone;
             }
         }
-
-        // The selected zone alone is not a sufficient cache key:
-        // edge blending changes continuously while the camera remains inside
-        // the same set of zones. Compare the evaluated settings instead.
-        if (!force && selectedZone == activeZone &&
-            SettingsApproximatelyEqual(activeSettings, nextSettings))
+        if (!force && selected == activeZone && SettingsApproximatelyEqual(activeSettings, next))
             return;
-
-        activeZone = selectedZone;
-        activeSettings = nextSettings;
-        lastAppliedTime = normalizedDayTime;
+        activeZone = selected;
+        activeSettings = next;
         ApplySettings();
     }
 
     private static bool SettingsApproximatelyEqual(
-        TabzHazeContextData.Settings a,
-        TabzHazeContextData.Settings b)
+        TabzHazeContextData.Settings a, TabzHazeContextData.Settings b)
     {
         return Mathf.Approximately(a.airScatteringScale, b.airScatteringScale) &&
             Mathf.Approximately(a.airDensityHeightFalloff, b.airDensityHeightFalloff) &&
@@ -189,121 +133,82 @@ public class MobileDistanceFog : MonoBehaviour
             Mathf.Approximately(a.heightFalloff, b.heightFalloff) &&
             Mathf.Approximately(a.fogScatteringScale, b.fogScatteringScale) &&
             Mathf.Approximately(a.fogScatteringDirection, b.fogScatteringDirection) &&
-            Approximately(a.ambient, b.ambient) &&
-            Approximately(a.lightColour, b.lightColour) &&
+            Approximately(a.ambient, b.ambient) && Approximately(a.lightColour, b.lightColour) &&
             Mathf.Approximately(a.opacity, b.opacity) &&
             Mathf.Approximately(a.startDistance, b.startDistance);
     }
 
     private static bool Approximately(Color a, Color b)
     {
-        return Mathf.Approximately(a.r, b.r) &&
-            Mathf.Approximately(a.g, b.g) &&
-            Mathf.Approximately(a.b, b.b) &&
-            Mathf.Approximately(a.a, b.a);
+        return Mathf.Approximately(a.r, b.r) && Mathf.Approximately(a.g, b.g) &&
+            Mathf.Approximately(a.b, b.b) && Mathf.Approximately(a.a, b.a);
     }
 
     private void ApplySettings()
     {
         if (fogMaterial == null) return;
-
         fogMaterial.SetColor("_FogColor", activeSettings.ambient);
         fogMaterial.SetFloat("_FogExtinction", activeSettings.extinction * intensityMultiplier);
         fogMaterial.SetFloat("_FogHeightFalloff", activeSettings.heightFalloff);
         fogMaterial.SetFloat("_FogOpacity", activeSettings.opacity);
-        // The original fogoff command changes the start distance to 5; it
-        // does not remove the entire atmosphere.
-        fogMaterial.SetFloat("_FogStartDistance",
-            fogEnabled ? activeSettings.startDistance : 5f);
-        fogMaterial.SetFloat("_CameraHeight", targetCamera != null
-            ? targetCamera.transform.position.y : 0f);
+        fogMaterial.SetFloat("_FogStartDistance", fogEnabled ? activeSettings.startDistance : 5f);
         fogMaterial.SetFloat("_HazeScattering",
             0.0021f * activeSettings.hazeScatteringScale * intensityMultiplier);
-        fogMaterial.SetFloat("_HazeHeightFalloff",
-            activeSettings.hazeDensityHeightFalloff);
-        fogMaterial.SetFloat("_HazeDirection",
-            activeSettings.hazeScatteringDirection);
-        fogMaterial.SetFloat("_HazeSecondaryRatio",
-            activeSettings.hazeSecondaryScatteringRatio);
-        // The original composite has independent air/Rayleigh and fog
-        // scattering channels; neither is interchangeable with haze strength.
-        fogMaterial.SetFloat("_AirScatteringScale",
-            activeSettings.airScatteringScale);
-        fogMaterial.SetFloat("_AirHeightFalloff",
-            activeSettings.airDensityHeightFalloff);
-        fogMaterial.SetFloat("_FogScatteringScale",
-            activeSettings.fogScatteringScale);
-        fogMaterial.SetFloat("_FogScatteringDirection",
-            activeSettings.fogScatteringDirection);
+        fogMaterial.SetFloat("_HazeHeightFalloff", activeSettings.hazeDensityHeightFalloff);
+        fogMaterial.SetFloat("_HazeDirection", activeSettings.hazeScatteringDirection);
+        fogMaterial.SetFloat("_HazeSecondaryRatio", activeSettings.hazeSecondaryScatteringRatio);
+        fogMaterial.SetFloat("_AirScatteringScale", activeSettings.airScatteringScale);
+        fogMaterial.SetFloat("_AirHeightFalloff", activeSettings.airDensityHeightFalloff);
+        fogMaterial.SetFloat("_FogScatteringScale", activeSettings.fogScatteringScale);
+        fogMaterial.SetFloat("_FogScatteringDirection", activeSettings.fogScatteringDirection);
         fogMaterial.SetFloat("_ScatteringEnabled", scatteringEnabled ? 1f : 0f);
-
         UpdateDirectionalLight();
     }
 
     private void UpdateDirectionalLight()
     {
         if (fogMaterial == null) return;
-
-        // Refresh every frame because the original day/night cycle rotates
-        // the directional light independently of haze-context transitions.
         Light sun = RenderSettings.sun;
         if (sun != null && sun.type == LightType.Directional)
         {
             fogMaterial.SetVector("_LightDirection", -sun.transform.forward);
-            fogMaterial.SetColor("_LightColour", sun.color * sun.intensity);
+            fogMaterial.SetVector("_LightColour", sun.color * sun.intensity);
         }
         else
         {
             fogMaterial.SetVector("_LightDirection", Vector3.down);
-            fogMaterial.SetColor("_LightColour", Color.black);
+            fogMaterial.SetVector("_LightColour", Vector3.zero);
         }
     }
 
     public string GetDiagnosticStatus()
     {
-        bool depthRequested = targetCamera != null &&
+        bool depth = targetCamera != null &&
             (targetCamera.depthTextureMode & DepthTextureMode.Depth) != 0;
-        string shaderStatus = !shaderFound ? "não" :
+        string shader = !shaderFound ? "não" :
             (fogMaterial != null && fogMaterial.shader.isSupported ? "OK" : "erro");
-        string renderStatus = renderImageCalls > 0
-            ? renderImageCalls.ToString() + " chamadas" : "NÃO chamado";
-        string errorStatus = string.IsNullOrEmpty(initializationError)
-            ? "nenhum" : initializationError;
-        return "Modo: " + (depthDebugEnabled ? "VISUALIZANDO DEPTH" : "névoa") +
-            " | Zona: " + activeZone +
-            " | Hora normalizada: " + normalizedDayTime.ToString("0.000") +
-            " | Intensidade: " + (intensityMultiplier * 100f).ToString("0") + "%" +
-            " | Espalhamento: " + (scatteringEnabled ? "ativo" : "desativado")
-            + " | Extinção: " + (activeSettings.extinction * intensityMultiplier).ToString("0.0000") +
-            " | Densidade vertical: " + activeSettings.heightFalloff.ToString("0.0000") +
-            " | Câmera: " + (targetCamera != null ? "OK" : "ausente") +
-            " | Shader: " + shaderStatus +
-            " | Depth: " + (depthRequested ? "solicitado" : "não") +
-            " | Render: " + renderStatus +
-            " | Erro: " + errorStatus;
+        return "Pipeline: radiância 1/2 + blur bilateral aproximado + composite | Zona: " +
+            activeZone + " | Intensidade: " + (intensityMultiplier * 100f).ToString("0") +
+            "% | Espalhamento: " + (scatteringEnabled ? "ativo" : "desativado") +
+            " | Shader: " + shader + " | Depth: " + (depth ? "solicitado" : "não") +
+            " | Render: " + (renderImageCalls > 0 ? renderImageCalls + " chamadas" : "NÃO chamado") +
+            " | Erro: " + (string.IsNullOrEmpty(initializationError) ? "nenhum" : initializationError);
     }
 
     private void UpdateOriginalViewportRays()
     {
         if (fogMaterial == null || targetCamera == null) return;
-
-        // Reproduce DS_HazeView's original _ViewportCorner/Right/Up setup.
-        // The original shader interpolates this far-clip-sized basis and
-        // multiplies it by Linear01Depth in the pixel stage.
-        float farClip = targetCamera.farClipPlane;
-        float halfFovRadians = targetCamera.fieldOfView * 0.5f * Mathf.Deg2Rad;
-        float halfHeight = Mathf.Tan(halfFovRadians) * farClip;
+        float far = targetCamera.farClipPlane;
+        float halfHeight = Mathf.Tan(targetCamera.fieldOfView * 0.5f * Mathf.Deg2Rad) * far;
         float halfWidth = halfHeight * targetCamera.aspect;
-        Transform cameraTransform = targetCamera.transform;
-
-        Vector3 forward = cameraTransform.forward * farClip;
-        Vector3 right = cameraTransform.right * halfWidth;
-        Vector3 up = cameraTransform.up * halfHeight;
-
+        Transform t = targetCamera.transform;
+        Vector3 forward = t.forward * far;
+        Vector3 right = t.right * halfWidth;
+        Vector3 up = t.up * halfHeight;
         fogMaterial.SetVector("_ViewportCorner", forward - right - up);
         fogMaterial.SetVector("_ViewportRight", right * 2f);
         fogMaterial.SetVector("_ViewportUp", up * 2f);
-        fogMaterial.SetFloat("_ViewportFarClip", farClip);
+        fogMaterial.SetFloat("_ViewportFarClip", far);
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
@@ -314,20 +219,46 @@ public class MobileDistanceFog : MonoBehaviour
             Graphics.Blit(source, destination);
             return;
         }
-
-        // Camera transform/projection can change after Update; match the
-        // original DS_HazeView, which rebuilds its viewport basis at render.
         UpdateOriginalViewportRays();
-
-        // A zero-intensity setting is a true bypass, not merely zero extinction.
-        // Keep the depth diagnostic available even when the fog slider is at 0%.
         if (intensityMultiplier <= 0f && !depthDebugEnabled)
         {
             Graphics.Blit(source, destination);
             return;
         }
+        if (depthDebugEnabled)
+        {
+            Graphics.Blit(source, destination, fogMaterial, 3);
+            return;
+        }
 
-        Graphics.Blit(source, destination, fogMaterial);
+        int width = Mathf.Max(1, source.width / 2);
+        int height = Mathf.Max(1, source.height / 2);
+        RenderTextureFormat format = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf)
+            ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.ARGB32;
+        RenderTexture radiance = null;
+        RenderTexture blur = null;
+        try
+        {
+            radiance = RenderTexture.GetTemporary(width, height, 0, format, RenderTextureReadWrite.Linear);
+            blur = RenderTexture.GetTemporary(width, height, 0, format, RenderTextureReadWrite.Linear);
+            radiance.filterMode = FilterMode.Point;
+            blur.filterMode = FilterMode.Point;
+            radiance.wrapMode = TextureWrapMode.Clamp;
+            blur.wrapMode = TextureWrapMode.Clamp;
+
+            Graphics.Blit(source, radiance, fogMaterial, 0);
+            Graphics.Blit(radiance, blur, fogMaterial, 1);
+            fogMaterial.SetTexture("_RadianceBuffer", blur);
+            Graphics.Blit(blur, radiance, fogMaterial, 2);
+            fogMaterial.SetTexture("_RadianceBuffer", radiance);
+            Graphics.Blit(source, destination, fogMaterial, 3);
+        }
+        finally
+        {
+            fogMaterial.SetTexture("_RadianceBuffer", null);
+            if (radiance != null) RenderTexture.ReleaseTemporary(radiance);
+            if (blur != null) RenderTexture.ReleaseTemporary(blur);
+        }
     }
 
     private void OnDestroy()
