@@ -216,6 +216,17 @@ for token in ("Graphics.Blit(source, radiance, fogMaterial, 0)",
     if token not in mobile_fog_source:
         errors.append(f"MobileDistanceFog.cs: missing multi-pass render step {token!r}")
 
+# Check the recovered bilateral-depth constants and linear-depth contract.
+mobile_fog_shader = (BASE.parent / "Resources" / "MobileDistanceFog.shader").read_text(encoding="utf-8")
+for token in ("_SamplingFalloff", "exp(-_SamplingFalloff*da*da)",
+              "float raw = max(max(raw0, raw1), max(raw2, raw3));",
+              "return float4(radiance, eye);",
+              "float e0=abs(r0.a-eye)"):
+    if token not in mobile_fog_shader:
+        errors.append(f"MobileDistanceFog.shader: missing recovered depth contract {token!r}")
+if 'fogMaterial.SetFloat("_SamplingFalloff", 500f);' not in mobile_fog_source:
+    errors.append("MobileDistanceFog.cs: original Gaussian depth falloff default 500 is not bound")
+
 if errors:
     print("\n".join("ERROR: " + e for e in errors))
     sys.exit(1)
