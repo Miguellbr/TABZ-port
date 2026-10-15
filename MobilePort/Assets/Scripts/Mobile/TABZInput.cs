@@ -39,6 +39,8 @@ public static class TABZInput
             case KeyCode.E: touch = MobileInputState.InteractPressed; break;
             case KeyCode.LeftControl:
             case KeyCode.RightControl: touch = MobileInputState.CrouchPressed; break;
+            case KeyCode.Z: touch = MobileInputState.PronePressed; break;
+            case KeyCode.G: touch = MobileInputState.SpecialPressed; break;
         }
         return Input.GetKeyDown(key) || touch;
     }
