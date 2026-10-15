@@ -1,6 +1,9 @@
 name: Audit original TABZ input code
 
 on:
+  push:
+    branches:
+      - audit/original-input
   workflow_dispatch:
     inputs:
       game_branch:
