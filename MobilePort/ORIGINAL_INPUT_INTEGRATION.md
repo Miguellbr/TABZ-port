@@ -6,8 +6,9 @@ This patch connects the recovered v5.1 gameplay scripts to the touch input state
 
 - `TABZInput.cs`: compatibility layer. Physical keyboard/mouse still works; touch state is added to the original queries.
 - `MobileInputState.cs`: held and one-frame touch states, including a consumable look delta.
-- `MobileActionButton.cs`: emits press edges for jump and crouch as well as fire/reload/interact.
-- `MobileControlsBootstrap.cs`: clears one-frame states at the end of the frame, after gameplay LateUpdate has had the chance to consume camera look.
+- `MobileActionButton.cs`: emits press edges for jump, crouch, prone, special mode, fall, pause, reload and interact; held actions include fire, aim and sprint.
+- `MobileControlsBootstrap.cs`: clears one-frame states at the end of the frame, after gameplay has consumed camera look, pause, and inventory events.
+- `MobileInventoryBridge.cs`: routes the INV and six hotbar buttons to the original `UIInventory` methods; the patcher also forwards touch drag coordinates into the original inventory UI.
 
 ## Applying to the decompiled v5.1 scripts
 
@@ -25,6 +26,9 @@ The patch updates these original classes only:
 - `WeaponHandler`: aim-hold and unarmed punches.
 - `StandHandler`: crouch/prone state input.
 - `PlayerInteraction`: pickup interaction.
+- `PhysicsAmimationController`: V/fall action.
+- `PauseMenuHandler`: mobile pause button without routing it through Escape, which is also used by chat.
+- `UIInventory` and `UIInventoryItem`: touch-based drag positioning while retaining the original inventory logic.
 
 The script is strict about the original camera Mouse X/Y code so it does not silently claim success against a different build.
 
