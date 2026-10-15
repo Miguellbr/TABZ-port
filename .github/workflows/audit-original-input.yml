@@ -32,10 +32,8 @@ jobs:
           ref: ${{ env.GAME_BRANCH }}
           path: original-source
           sparse-checkout: |
-            TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp.dll
-            TABZ/TABZ Modded v4/GAME_Data/Managed/Assembly-Csharp.dll
-            TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp-firstpass.dll
-            TABZ/TABZ Modded v4/GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+            TABZ/TABZ modded v5/GAME_Data/Managed
+            TABZ/TABZ Modded v4/GAME_Data/Managed
 
       - name: Select original gameplay assembly
         id: assembly
@@ -46,7 +44,6 @@ jobs:
           else
             echo "path=TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp.dll" >> "$GITHUB_OUTPUT"
           fi
-          test -s "original-source/${{ steps.assembly.outputs.path }}" || true
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
