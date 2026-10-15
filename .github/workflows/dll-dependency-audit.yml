@@ -18,13 +18,15 @@ jobs:
       - name: Checkout audit branch
         uses: actions/checkout@v4
 
-      - name: Checkout original TABZ v5.1 managed assemblies
+      - name: Checkout original TABZ v5.1 assemblies and plugins
         uses: actions/checkout@v4
         with:
           ref: tabz-v5.1
           path: original-source
           sparse-checkout: |
             TABZ/TABZ modded v5/GAME_Data/Managed
+            TABZ/TABZ modded v5/GAME_Data/Plugins
+            TABZ/TABZ modded v5/steam_api.dll
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -34,42 +36,65 @@ jobs:
       - name: Install ILSpy
         run: dotnet tool install ilspycmd --tool-path ./ilspy-tools
 
-      - name: Decompile main and firstpass assemblies
+      - name: Decompile assemblies and generate dependency report
         shell: bash
         run: |
           set -euo pipefail
           MANAGED="original-source/TABZ/TABZ modded v5/GAME_Data/Managed"
+          PLUGINS="original-source/TABZ/TABZ modded v5/GAME_Data/Plugins"
           mkdir -p report/main report/firstpass
           ./ilspy-tools/ilspycmd -p -o report/main "$MANAGED/Assembly-CSharp.dll"
           ./ilspy-tools/ilspycmd -p -o report/firstpass "$MANAGED/Assembly-CSharp-firstpass.dll"
-          {
-            echo "# TABZ v5.1 managed DLL compatibility audit"
-            echo
-            echo "## Original managed assemblies"
-            find "$MANAGED" -maxdepth 1 -type f -name '*.dll' -printf '%f (%s bytes)\n' | sort
-            echo
-            echo "## Main assembly references inferred by ILSpy project"
-            sed -n '/<ItemGroup>/,/<\/ItemGroup>/p' report/main/Assembly-CSharp.csproj
-            echo
-            echo "## Firstpass assembly references inferred by ILSpy project"
-            sed -n '/<ItemGroup>/,/<\/ItemGroup>/p' report/firstpass/Assembly-CSharp-firstpass.csproj
-            echo
-            echo "## Native interop declarations in both assemblies"
-            rg -n 'DllImport|LibraryImport|extern ' report/main report/firstpass --glob '*.cs' || true
-            echo
-            echo "## FMOD and GVR dependencies"
-            rg -n 'using FMOD|using FMODUnity|FMODUnity\.|GvrAudio|Gvr' report/main report/firstpass --glob '*.cs' || true
-            echo
-            echo "## Unity API namespaces outside core UnityEngine"
-            rg -o 'UnityEngine\.[A-Za-z0-9_.]+' report/main report/firstpass --glob '*.cs' | sed 's/.*://' | sort -u || true
-            echo
-            echo "## Assembly load/reflection usage"
-            rg -n 'Assembly\.Load|LoadFrom|Reflection\.Emit|DynamicMethod|AppDomain' report/main report/firstpass --glob '*.cs' || true
-            echo
-            echo "## Decompiled source counts"
-            printf 'Main: '; find report/main -name '*.cs' | wc -l
-            printf 'Firstpass: '; find report/firstpass -name '*.cs' | wc -l
-          } > report/compatibility-audit.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path("report")
+          original = Path("original-source/TABZ/TABZ modded v5")
+          managed = original / "GAME_Data/Managed"
+          plugins = original / "GAME_Data/Plugins"
+          sections = ["# TABZ v5.1 managed DLL compatibility audit", ""]
+          sections += ["## Original managed assemblies"]
+          sections += [f"- {p.name}: {p.stat().st_size} bytes" for p in sorted(managed.glob("*.dll"))]
+          sections += ["", "## Original plugin and native library files"]
+          plugin_files = sorted(p for p in original.rglob("*") if p.is_file() and (p.suffix.lower() in {".dll", ".so", ".dylib"}))
+          sections += [f"- {p.relative_to(original)}: {p.stat().st_size} bytes" for p in plugin_files]
+          for label, folder, project in [
+              ("Main assembly", root / "main", "Assembly-CSharp.csproj"),
+              ("Firstpass assembly", root / "firstpass", "Assembly-CSharp-firstpass.csproj")
+          ]:
+              sections += ["", f"## {label} references"]
+              csproj = folder / project
+              if csproj.exists():
+                  xml = csproj.read_text(errors="replace")
+                  refs = re.findall(r'<Reference Include="([^"]+)"', xml)
+                  sections += [f"- {x}" for x in refs] or ["- No references parsed"]
+              else:
+                  sections += ["- Project file missing"]
+              files = list(folder.rglob("*.cs"))
+              imports = {}
+              namespaces = set()
+              for p in files:
+                  source = p.read_text(errors="replace")
+                  for lib in re.findall(r'\[DllImport\s*\(\s*"([^"]+)"', source):
+                      imports[lib] = imports.get(lib, 0) + 1
+                  namespaces.update(re.findall(r'using\s+(UnityEngine\.[\w.]+)\s*;', source))
+              sections += ["", f"### Native P/Invoke libraries ({label})"]
+              sections += [f"- {name}: {count} declarations" for name, count in sorted(imports.items())] or ["- None found"]
+              sections += ["", f"### Unity namespaces ({label})"]
+              sections += [f"- {name}" for name in sorted(namespaces)] or ["- None found"]
+              sections += ["", f"### Decompiled source count: {len(files)}"]
+          sections += ["", "## Native library presence check"]
+          imports = set()
+          for folder in (root / "main", root / "firstpass"):
+              for p in folder.rglob("*.cs"):
+                  imports.update(re.findall(r'\[DllImport\s*\(\s*"([^"]+)"', p.read_text(errors="replace")))
+          names = {p.stem.lower() for p in plugin_files}
+          for name in sorted(imports):
+              status = "matching file name found in original game tree" if name.lower() in names else "no matching plugin filename found in checked original game tree"
+              sections += [f"- {name}: {status}"]
+          sections += ["", "## Interpretation limits", "- This is a static inspection of decompiled managed code and repository files. It does not prove Unity 2022.3 Editor compatibility, Android compilation, or runtime behavior.", "- DLL references listed above are inferred from ILSpy-generated project files; native P/Invoke libraries are listed separately."]
+          (root / "compatibility-audit.md").write_text("\n".join(sections) + "\n")
+          PY
 
       - name: Upload compatibility audit
         uses: actions/upload-artifact@v4
