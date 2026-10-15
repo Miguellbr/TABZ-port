@@ -9,7 +9,7 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
 {
     public enum ActionType
     {
-        Fire, Aim, Jump, Sprint, Crouch, Prone, Special, Reload, Interact, Inventory,
+        Fire, Aim, Jump, Sprint, Crouch, Prone, Special, Fall, Pause, Reload, Interact, Inventory,
         Hotbar1, Hotbar2, Hotbar3, Hotbar4, Hotbar5, Hotbar6
     }
 
@@ -50,6 +50,8 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
                 break;
             case ActionType.Prone: if (pressed) MobileInputState.PronePressed = true; break;
             case ActionType.Special: if (pressed) MobileInputState.SpecialPressed = true; break;
+            case ActionType.Fall: if (pressed) MobileInputState.FallPressed = true; break;
+            case ActionType.Pause: if (pressed) MobileInputState.PausePressed = true; break;
             case ActionType.Reload: if (pressed) MobileInputState.ReloadPressed = true; break;
             case ActionType.Interact: if (pressed) MobileInputState.InteractPressed = true; break;
             case ActionType.Inventory: if (pressed) MobileInputState.InventoryTogglePressed = true; break;
