@@ -14,8 +14,21 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
     }
 
     public ActionType action;
-    public void OnPointerDown(PointerEventData eventData) { SetState(true); }
-    public void OnPointerUp(PointerEventData eventData) { SetState(false); }
+    private int activePointer = int.MinValue;
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        if (activePointer != int.MinValue) return;
+        activePointer = eventData.pointerId;
+        SetState(true);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (eventData.pointerId != activePointer) return;
+        activePointer = int.MinValue;
+        SetState(false);
+    }
 
     private void SetState(bool pressed)
     {
@@ -49,5 +62,10 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
         }
     }
 
-    private void OnDisable() { SetState(false); }
+    private void OnDisable()
+    {
+        if (activePointer == int.MinValue) return;
+        activePointer = int.MinValue;
+        SetState(false);
+    }
 }
