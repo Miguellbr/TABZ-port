@@ -35,7 +35,9 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
                 MobileInputState.CrouchHeld = pressed;
                 if (pressed) MobileInputState.CrouchPressed = true;
                 break;
-            case ActionType.Prone: if (pressed) MobileInputState.PronePressed = true; break;\n            case ActionType.Special: if (pressed) MobileInputState.SpecialPressed = true; break;\n            case ActionType.Reload: if (pressed) MobileInputState.ReloadPressed = true; break;
+            case ActionType.Prone: if (pressed) MobileInputState.PronePressed = true; break;
+            case ActionType.Special: if (pressed) MobileInputState.SpecialPressed = true; break;
+            case ActionType.Reload: if (pressed) MobileInputState.ReloadPressed = true; break;
             case ActionType.Interact: if (pressed) MobileInputState.InteractPressed = true; break;
             case ActionType.Inventory: if (pressed) MobileInputState.InventoryTogglePressed = true; break;
             case ActionType.Hotbar1: if (pressed) MobileInputState.HotbarSlotPressed = 0; break;
