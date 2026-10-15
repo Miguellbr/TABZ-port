@@ -33,8 +33,13 @@ public class MobileLookArea : MonoBehaviour, IPointerDownHandler, IDragHandler, 
         if (eventData.pointerId == activePointer) activePointer = int.MinValue;
     }
 
-    private void OnDisable()
+    private void OnDisable() { CancelPointer(); }
+    private void OnApplicationFocus(bool hasFocus) { if (!hasFocus) CancelPointer(); }
+    private void OnApplicationPause(bool paused) { if (paused) CancelPointer(); }
+
+    private void CancelPointer()
     {
         activePointer = int.MinValue;
+        previousPosition = Vector2.zero;
     }
 }
