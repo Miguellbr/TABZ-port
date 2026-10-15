@@ -20,6 +20,8 @@ permissions:
 jobs:
   decompile-input:
     runs-on: ubuntu-latest
+    env:
+      GAME_BRANCH: ${{ inputs.game_branch || 'tabz-v5.1' }}
     steps:
       - name: Checkout workflow
         uses: actions/checkout@v4
@@ -27,11 +29,24 @@ jobs:
       - name: Checkout selected original game build
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.game_branch }}
+          ref: ${{ env.GAME_BRANCH }}
           path: original-source
           sparse-checkout: |
-            GAME_Data/Managed/Assembly-CSharp.dll
-            GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+            TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp.dll
+            TABZ/TABZ Modded v4/GAME_Data/Managed/Assembly-Csharp.dll
+            TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+            TABZ/TABZ Modded v4/GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+
+      - name: Select original gameplay assembly
+        id: assembly
+        shell: bash
+        run: |
+          if [[ "$GAME_BRANCH" == "tabz-v4" ]]; then
+            echo "path=TABZ/TABZ Modded v4/GAME_Data/Managed/Assembly-Csharp.dll" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp.dll" >> "$GITHUB_OUTPUT"
+          fi
+          test -s "original-source/${{ steps.assembly.outputs.path }}" || true
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -42,25 +57,28 @@ jobs:
         run: dotnet tool install ilspycmd --tool-path ./ilspy-tools
 
       - name: Decompile original gameplay assembly
+        shell: bash
         run: |
           mkdir -p decompiled
-          ./ilspy-tools/ilspycmd -p -o decompiled original-source/GAME_Data/Managed/Assembly-CSharp.dll
+          ASSEMBLY="original-source/${{ steps.assembly.outputs.path }}"
+          test -s "$ASSEMBLY"
+          ls -lh "$ASSEMBLY"
+          ./ilspy-tools/ilspycmd -p -o decompiled "$ASSEMBLY"
 
       - name: Build input and controller audit
+        shell: bash
         run: |
           {
             echo "# TABZ original code audit"
             echo
-            echo "Source branch: ${{ inputs.game_branch }}"
-            echo
-            echo "## Assembly"
-            ls -lh original-source/GAME_Data/Managed/Assembly-CSharp*.dll
+            echo "Source branch: $GAME_BRANCH"
+            echo "Assembly: ${{ steps.assembly.outputs.path }}"
             echo
             echo "## Classes and methods referencing Unity input"
-            rg -n -i -C 3 'Input\.(GetAxis|GetAxisRaw|GetKey|GetKeyDown|GetKeyUp|GetMouseButton|GetMouseButtonDown|GetMouseButtonUp)|KeyCode\.|Cursor\.' decompiled --glob '*.cs' || true
+            rg -n -i -C 3 'Input\\.(GetAxis|GetAxisRaw|GetKey|GetKeyDown|GetKeyUp|GetMouseButton|GetMouseButtonDown|GetMouseButtonUp)|KeyCode\\.|Cursor\\.' decompiled --glob '*.cs' || true
             echo
             echo "## Candidate player, camera, movement and weapon classes"
-            rg -n -i 'class .*?(Player|FPS|FirstPerson|Movement|Controller|Camera|Weapon|Gun|Inventory)|void (Update|FixedUpdate|LateUpdate)\(' decompiled --glob '*.cs' || true
+            rg -n -i 'class .*?(Player|FPS|FirstPerson|Movement|Controller|Camera|Weapon|Gun|Inventory)|void (Update|FixedUpdate|LateUpdate)\\(' decompiled --glob '*.cs' || true
             echo
             echo "## Input-related identifiers"
             rg -n -i 'horizontal|vertical|mouse x|mouse y|sensitivity|recoil|reload|sprint|crouch|jump|fire|aim|interact' decompiled --glob '*.cs' || true
@@ -69,7 +87,7 @@ jobs:
       - name: Upload decompiled source and audit
         uses: actions/upload-artifact@v4
         with:
-          name: tabz-input-audit-${{ inputs.game_branch }}
+          name: tabz-input-audit-${{ env.GAME_BRANCH }}
           path: |
             audit-summary.md
             decompiled/
