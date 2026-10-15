@@ -90,6 +90,10 @@ public class MobileControlsBootstrap : MonoBehaviour
             new Vector2(0.70f, 0.29f), new Vector2(0.80f, 0.42f), new Color(0.2f, 0.2f, 0.2f, 0.7f));
         MakeButton(root, "USE", MobileActionButton.ActionType.Interact,
             new Vector2(0.83f, 0.34f), new Vector2(0.94f, 0.47f), new Color(0.2f, 0.2f, 0.2f, 0.7f));
+        MakeButton(root, "FALL", MobileActionButton.ActionType.Fall,
+            new Vector2(0.56f, 0.42f), new Vector2(0.68f, 0.55f), new Color(0.35f, 0.2f, 0.2f, 0.68f));
+        MakeButton(root, "PAUSE", MobileActionButton.ActionType.Pause,
+            new Vector2(0.03f, 0.04f), new Vector2(0.13f, 0.14f), new Color(0.12f, 0.12f, 0.12f, 0.72f));
 
         // The original game has a six-slot hotbar; these buttons emit slot taps
         // that the UIInventory mobile patch will consume.
