@@ -37,4 +37,17 @@ public static class MobileInputState
         InventoryTogglePressed = false;
         HotbarSlotPressed = -1;
     }
+
+    public static void ResetAll()
+    {
+        Move = Vector2.zero;
+        LookDelta = Vector2.zero;
+        FireHeld = FirePressed = AimHeld = false;
+        JumpHeld = JumpPressed = false;
+        ReloadPressed = InteractPressed = SprintHeld = false;
+        CrouchHeld = CrouchPressed = false;
+        PronePressed = SpecialPressed = false;
+        InventoryTogglePressed = false;
+        HotbarSlotPressed = -1;
+    }
 }
