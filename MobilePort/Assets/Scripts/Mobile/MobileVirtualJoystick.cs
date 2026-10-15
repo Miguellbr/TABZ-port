@@ -69,4 +69,6 @@ public class MobileVirtualJoystick : MonoBehaviour, IPointerDownHandler, IDragHa
     }
 
     private void OnDisable() { Release(); }
+    private void OnApplicationFocus(bool hasFocus) { if (!hasFocus) Release(); }
+    private void OnApplicationPause(bool paused) { if (paused) Release(); }
 }
