@@ -13,7 +13,7 @@ public static class MobileInputState
     public static bool JumpHeld, JumpPressed;
     public static bool ReloadPressed, InteractPressed, SprintHeld;
     public static bool CrouchHeld, CrouchPressed;
-    public static bool PronePressed, SpecialPressed;
+    public static bool PronePressed, SpecialPressed, FallPressed, PausePressed;
     public static bool InventoryTogglePressed;
     public static int HotbarSlotPressed = -1;
 
@@ -34,6 +34,8 @@ public static class MobileInputState
         CrouchPressed = false;
         PronePressed = false;
         SpecialPressed = false;
+        FallPressed = false;
+        PausePressed = false;
         InventoryTogglePressed = false;
         HotbarSlotPressed = -1;
     }
@@ -46,7 +48,7 @@ public static class MobileInputState
         JumpHeld = JumpPressed = false;
         ReloadPressed = InteractPressed = SprintHeld = false;
         CrouchHeld = CrouchPressed = false;
-        PronePressed = SpecialPressed = false;
+        PronePressed = SpecialPressed = FallPressed = PausePressed = false;
         InventoryTogglePressed = false;
         HotbarSlotPressed = -1;
     }
