@@ -11,7 +11,7 @@ root = Path(sys.argv[1])
 files = [
     "PlayerHandler.cs", "CameraMovement.cs", "Weapon.cs",
     "WeaponHandler.cs", "StandHandler.cs", "PlayerInteraction.cs",
-    "PhysicsAmimationController.cs", "PauseMenuHandler.cs",
+    "PhysicsAmimationController.cs",
 ]
 missing = [name for name in files if not (root / name).is_file()]
 if missing:
@@ -46,6 +46,16 @@ for name in files:
     counts[name] = (held, down)
 
 camera_path.write_text(pattern.sub(replacement, camera, count=1), encoding="utf-8")
+pause_path = root / "PauseMenuHandler.cs"
+pause_source = pause_path.read_text(encoding="utf-8")
+pause_old = "if (Input.GetKeyDown(KeyCode.Escape))"
+if pause_old not in pause_source:
+    raise SystemExit("Expected PauseMenuHandler Escape check was not found.")
+pause_path.write_text(
+    pause_source.replace(pause_old, "if (Input.GetKeyDown(KeyCode.Escape) || MobileInputState.PausePressed)", 1),
+    encoding="utf-8",
+)
+
 print("Patched original TABZ input sites:")
 for name, (held, down) in counts.items():
     print(f"  {name}: {held} held-key reads, {down} key-down reads")
