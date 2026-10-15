@@ -32,4 +32,9 @@ public class MobileLookArea : MonoBehaviour, IPointerDownHandler, IDragHandler, 
     {
         if (eventData.pointerId == activePointer) activePointer = int.MinValue;
     }
+
+    private void OnDisable()
+    {
+        activePointer = int.MinValue;
+    }
 }
