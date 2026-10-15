@@ -7,10 +7,17 @@ using UnityEngine.EventSystems;
 /// Attach to a scene object in the test scene. Gameplay scripts still need
 /// explicit mobile branches to consume MobileInputState.
 /// </summary>
+[DefaultExecutionOrder(32000)]
 public class MobileControlsBootstrap : MonoBehaviour
 {
     public bool createOnDesktopForTesting = false;
     public float lookSensitivity = 0.12f;
+
+    private void LateUpdate()
+    {
+        // Clear one-frame inputs only after the original camera consumed look delta.
+        MobileInputState.ResetFrame();
+    }
 
     private void Awake()
     {
