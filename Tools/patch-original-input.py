@@ -17,6 +17,10 @@ missing = [name for name in files if not (root / name).is_file()]
 if missing:
     raise SystemExit("Missing expected decompiled files: " + ", ".join(missing))
 
+pause_path = root / "PauseMenuHandler.cs"
+if not pause_path.is_file():
+    raise SystemExit("Missing expected decompiled file: PauseMenuHandler.cs")
+
 camera_path = root / "CameraMovement.cs"
 camera = camera_path.read_text(encoding="utf-8")
 pattern = re.compile(
