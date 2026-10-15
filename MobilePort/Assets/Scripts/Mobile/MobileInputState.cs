@@ -8,6 +8,8 @@ public static class MobileInputState
 {
     public static Vector2 Move;
     public static Vector2 LookDelta;
+    public static Vector2 InventoryPointerPosition;
+    public static bool InventoryPointerActive;
 
     public static bool FireHeld, FirePressed, AimHeld;
     public static bool JumpHeld, JumpPressed;
@@ -27,6 +29,7 @@ public static class MobileInputState
     public static void ResetFrame()
     {
         LookDelta = Vector2.zero;
+        InventoryPointerActive = false;
         FirePressed = false;
         JumpPressed = false;
         ReloadPressed = false;
@@ -44,6 +47,8 @@ public static class MobileInputState
     {
         Move = Vector2.zero;
         LookDelta = Vector2.zero;
+        InventoryPointerPosition = Vector2.zero;
+        InventoryPointerActive = false;
         FireHeld = FirePressed = AimHeld = false;
         JumpHeld = JumpPressed = false;
         ReloadPressed = InteractPressed = SprintHeld = false;
