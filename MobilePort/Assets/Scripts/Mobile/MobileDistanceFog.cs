@@ -41,6 +41,13 @@ public class MobileDistanceFog : MonoBehaviour
             return;
         }
         shaderFound = true;
+        if (shader.passCount < 4)
+        {
+            initializationError = "Shader compilado com apenas " + shader.passCount + " passes; são necessários 4";
+            Debug.LogError("MobileDistanceFog: " + initializationError + ".");
+            enabled = false;
+            return;
+        }
         if (!shader.isSupported)
         {
             initializationError = "Shader não suportado neste aparelho";
