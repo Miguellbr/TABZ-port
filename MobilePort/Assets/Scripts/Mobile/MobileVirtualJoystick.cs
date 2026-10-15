@@ -14,6 +14,7 @@ public class MobileVirtualJoystick : MonoBehaviour, IPointerDownHandler, IDragHa
 
     private Vector2 origin;
     private Canvas canvas;
+    private int activePointer = int.MinValue;
 
     private void Awake()
     {
@@ -24,19 +25,23 @@ public class MobileVirtualJoystick : MonoBehaviour, IPointerDownHandler, IDragHa
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        if (activePointer != int.MinValue) return;
+        activePointer = eventData.pointerId;
+
         if (floatingJoystick && background != null && canvas != null)
         {
             Vector2 local;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 background.parent as RectTransform, eventData.position,
-                eventData.pressEventCamera, out local);
-            background.anchoredPosition = local;
+                eventData.pressEventCamera, out local))
+                background.anchoredPosition = local;
         }
         OnDrag(eventData);
     }
 
     public void OnDrag(PointerEventData eventData)
     {
+        if (eventData.pointerId != activePointer) return;
         if (background == null || handle == null) return;
         Vector2 local;
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
@@ -51,8 +56,17 @@ public class MobileVirtualJoystick : MonoBehaviour, IPointerDownHandler, IDragHa
 
     public void OnPointerUp(PointerEventData eventData)
     {
+        if (eventData.pointerId != activePointer) return;
+        Release();
+    }
+
+    private void Release()
+    {
+        activePointer = int.MinValue;
         MobileInputState.Move = Vector2.zero;
         if (handle != null) handle.anchoredPosition = Vector2.zero;
         if (floatingJoystick && background != null) background.anchoredPosition = origin;
     }
+
+    private void OnDisable() { Release(); }
 }
