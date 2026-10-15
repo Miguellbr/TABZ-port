@@ -3,7 +3,7 @@ using UnityEngine.EventSystems;
 
 /// <summary>
 /// Reusable touch button. Hold actions remain active while pressed; one-shot
-/// actions are latched until the gameplay adapter consumes/resets the frame.
+/// actions are latched until the end-of-frame reset.
 /// </summary>
 public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
@@ -14,7 +14,6 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
     }
 
     public ActionType action;
-
     public void OnPointerDown(PointerEventData eventData) { SetState(true); }
     public void OnPointerUp(PointerEventData eventData) { SetState(false); }
 
@@ -27,9 +26,15 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
                 if (pressed) MobileInputState.FirePressed = true;
                 break;
             case ActionType.Aim: MobileInputState.AimHeld = pressed; break;
-            case ActionType.Jump: MobileInputState.JumpHeld = pressed; break;
+            case ActionType.Jump:
+                MobileInputState.JumpHeld = pressed;
+                if (pressed) MobileInputState.JumpPressed = true;
+                break;
             case ActionType.Sprint: MobileInputState.SprintHeld = pressed; break;
-            case ActionType.Crouch: MobileInputState.CrouchHeld = pressed; break;
+            case ActionType.Crouch:
+                MobileInputState.CrouchHeld = pressed;
+                if (pressed) MobileInputState.CrouchPressed = true;
+                break;
             case ActionType.Reload: if (pressed) MobileInputState.ReloadPressed = true; break;
             case ActionType.Interact: if (pressed) MobileInputState.InteractPressed = true; break;
             case ActionType.Inventory: if (pressed) MobileInputState.InventoryTogglePressed = true; break;
