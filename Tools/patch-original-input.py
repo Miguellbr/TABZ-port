@@ -11,6 +11,7 @@ root = Path(sys.argv[1])
 files = [
     "PlayerHandler.cs", "CameraMovement.cs", "Weapon.cs",
     "WeaponHandler.cs", "StandHandler.cs", "PlayerInteraction.cs",
+    "PhysicsAmimationController.cs", "PauseMenuHandler.cs",
 ]
 missing = [name for name in files if not (root / name).is_file()]
 if missing:
