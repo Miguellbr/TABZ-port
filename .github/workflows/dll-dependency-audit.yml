@@ -1,0 +1,80 @@
+name: TABZ DLL dependency audit
+
+on:
+  push:
+    branches:
+      - audit/original-input
+    paths:
+      - .github/workflows/dll-dependency-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-managed-assemblies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
+
+      - name: Checkout original TABZ v5.1 managed assemblies
+        uses: actions/checkout@v4
+        with:
+          ref: tabz-v5.1
+          path: original-source
+          sparse-checkout: |
+            TABZ/TABZ modded v5/GAME_Data/Managed
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install ILSpy
+        run: dotnet tool install ilspycmd --tool-path ./ilspy-tools
+
+      - name: Decompile main and firstpass assemblies
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANAGED="original-source/TABZ/TABZ modded v5/GAME_Data/Managed"
+          mkdir -p report/main report/firstpass
+          ./ilspy-tools/ilspycmd -p -o report/main "$MANAGED/Assembly-CSharp.dll"
+          ./ilspy-tools/ilspycmd -p -o report/firstpass "$MANAGED/Assembly-CSharp-firstpass.dll"
+          {
+            echo "# TABZ v5.1 managed DLL compatibility audit"
+            echo
+            echo "## Original managed assemblies"
+            find "$MANAGED" -maxdepth 1 -type f -name '*.dll' -printf '%f (%s bytes)\n' | sort
+            echo
+            echo "## Main assembly references inferred by ILSpy project"
+            sed -n '/<ItemGroup>/,/<\/ItemGroup>/p' report/main/Assembly-CSharp.csproj
+            echo
+            echo "## Firstpass assembly references inferred by ILSpy project"
+            sed -n '/<ItemGroup>/,/<\/ItemGroup>/p' report/firstpass/Assembly-CSharp-firstpass.csproj
+            echo
+            echo "## Native interop declarations in both assemblies"
+            rg -n 'DllImport|LibraryImport|extern ' report/main report/firstpass --glob '*.cs' || true
+            echo
+            echo "## FMOD and GVR dependencies"
+            rg -n 'using FMOD|using FMODUnity|FMODUnity\.|GvrAudio|Gvr' report/main report/firstpass --glob '*.cs' || true
+            echo
+            echo "## Unity API namespaces outside core UnityEngine"
+            rg -o 'UnityEngine\.[A-Za-z0-9_.]+' report/main report/firstpass --glob '*.cs' | sed 's/.*://' | sort -u || true
+            echo
+            echo "## Assembly load/reflection usage"
+            rg -n 'Assembly\.Load|LoadFrom|Reflection\.Emit|DynamicMethod|AppDomain' report/main report/firstpass --glob '*.cs' || true
+            echo
+            echo "## Decompiled source counts"
+            printf 'Main: '; find report/main -name '*.cs' | wc -l
+            printf 'Firstpass: '; find report/firstpass -name '*.cs' | wc -l
+          } > report/compatibility-audit.md
+
+      - name: Upload compatibility audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-v5.1-dll-compatibility-audit
+          path: report/
+          if-no-files-found: error
+          retention-days: 14
