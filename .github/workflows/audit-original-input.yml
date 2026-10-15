@@ -75,10 +75,10 @@ jobs:
             echo "Assembly: ${{ steps.assembly.outputs.path }}"
             echo
             echo "## Classes and methods referencing Unity input"
-            rg -n -i -C 3 'Input\\.(GetAxis|GetAxisRaw|GetKey|GetKeyDown|GetKeyUp|GetMouseButton|GetMouseButtonDown|GetMouseButtonUp)|KeyCode\\.|Cursor\\.' decompiled --glob '*.cs' || true
+            rg -n -i -C 3 'Input\.|KeyCode\.|Cursor\.' decompiled --glob '*.cs' || true
             echo
             echo "## Candidate player, camera, movement and weapon classes"
-            rg -n -i 'class .*?(Player|FPS|FirstPerson|Movement|Controller|Camera|Weapon|Gun|Inventory)|void (Update|FixedUpdate|LateUpdate)\\(' decompiled --glob '*.cs' || true
+            rg -n -i 'class .*Player|class .*FPS|class .*FirstPerson|class .*Movement|class .*Controller|class .*Camera|class .*Weapon|class .*Gun|class .*Inventory|void Update|void FixedUpdate|void LateUpdate' decompiled --glob '*.cs' || true
             echo
             echo "## Input-related identifiers"
             rg -n -i 'horizontal|vertical|mouse x|mouse y|sensitivity|recoil|reload|sprint|crouch|jump|fire|aim|interact' decompiled --glob '*.cs' || true
