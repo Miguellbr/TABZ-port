@@ -16,7 +16,14 @@ public static class MobileInputState
     public static bool InventoryTogglePressed;
     public static int HotbarSlotPressed = -1;
 
-    public static Vector2 ConsumeLookDelta()\n    {\n        Vector2 delta = LookDelta;\n        LookDelta = Vector2.zero;\n        return delta;\n    }\n\n    public static void ResetFrame()
+    public static Vector2 ConsumeLookDelta()
+    {
+        Vector2 delta = LookDelta;
+        LookDelta = Vector2.zero;
+        return delta;
+    }
+
+    public static void ResetFrame()
     {
         LookDelta = Vector2.zero;
         FirePressed = false;
@@ -26,12 +33,5 @@ public static class MobileInputState
         CrouchPressed = false;
         InventoryTogglePressed = false;
         HotbarSlotPressed = -1;
-    }
-
-    public static Vector2 ConsumeLookDelta()
-    {
-        Vector2 delta = LookDelta;
-        LookDelta = Vector2.zero;
-        return delta;
     }
 }
