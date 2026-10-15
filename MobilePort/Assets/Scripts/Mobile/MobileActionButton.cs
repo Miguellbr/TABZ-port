@@ -62,7 +62,11 @@ public class MobileActionButton : MonoBehaviour, IPointerDownHandler, IPointerUp
         }
     }
 
-    private void OnDisable()
+    private void OnDisable() { CancelPointer(); }
+    private void OnApplicationFocus(bool hasFocus) { if (!hasFocus) CancelPointer(); }
+    private void OnApplicationPause(bool paused) { if (paused) CancelPointer(); }
+
+    private void CancelPointer()
     {
         if (activePointer == int.MinValue) return;
         activePointer = int.MinValue;
