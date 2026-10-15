@@ -1,0 +1,74 @@
+name: Audit original TABZ input code
+
+on:
+  workflow_dispatch:
+    inputs:
+      game_branch:
+        description: Original game build to inspect
+        required: true
+        type: choice
+        options:
+          - tabz-v5.1
+          - tabz-v4
+
+permissions:
+  contents: read
+
+jobs:
+  decompile-input:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow
+        uses: actions/checkout@v4
+
+      - name: Checkout selected original game build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.game_branch }}
+          path: original-source
+          sparse-checkout: |
+            GAME_Data/Managed/Assembly-CSharp.dll
+            GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install ILSpy command line
+        run: dotnet tool install ilspycmd --tool-path ./ilspy-tools
+
+      - name: Decompile original gameplay assembly
+        run: |
+          mkdir -p decompiled
+          ./ilspy-tools/ilspycmd -p -o decompiled original-source/GAME_Data/Managed/Assembly-CSharp.dll
+
+      - name: Build input and controller audit
+        run: |
+          {
+            echo "# TABZ original code audit"
+            echo
+            echo "Source branch: ${{ inputs.game_branch }}"
+            echo
+            echo "## Assembly"
+            ls -lh original-source/GAME_Data/Managed/Assembly-CSharp*.dll
+            echo
+            echo "## Classes and methods referencing Unity input"
+            rg -n -i -C 3 'Input\.(GetAxis|GetAxisRaw|GetKey|GetKeyDown|GetKeyUp|GetMouseButton|GetMouseButtonDown|GetMouseButtonUp)|KeyCode\.|Cursor\.' decompiled --glob '*.cs' || true
+            echo
+            echo "## Candidate player, camera, movement and weapon classes"
+            rg -n -i 'class .*?(Player|FPS|FirstPerson|Movement|Controller|Camera|Weapon|Gun|Inventory)|void (Update|FixedUpdate|LateUpdate)\(' decompiled --glob '*.cs' || true
+            echo
+            echo "## Input-related identifiers"
+            rg -n -i 'horizontal|vertical|mouse x|mouse y|sensitivity|recoil|reload|sprint|crouch|jump|fire|aim|interact' decompiled --glob '*.cs' || true
+          } > audit-summary.md
+
+      - name: Upload decompiled source and audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-input-audit-${{ inputs.game_branch }}
+          path: |
+            audit-summary.md
+            decompiled/
+          if-no-files-found: error
+          retention-days: 14
