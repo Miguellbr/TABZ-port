@@ -70,7 +70,13 @@ public class MobileControlsBootstrap : MonoBehaviour
             new Vector2(0.31f, 0.09f), new Vector2(0.41f, 0.24f), new Color(0.18f, 0.45f, 0.2f, 0.68f));
         MakeButton(root, "SPRINT", MobileActionButton.ActionType.Sprint,
             new Vector2(0.20f, 0.08f), new Vector2(0.29f, 0.20f), new Color(0.18f, 0.35f, 0.2f, 0.62f));
-        MakeButton(root, "CROUCH", MobileActionButton.ActionType.Crouch,\n            new Vector2(0.56f, 0.09f), new Vector2(0.68f, 0.23f), new Color(0.32f, 0.32f, 0.32f, 0.68f));\n        MakeButton(root, "PRONE", MobileActionButton.ActionType.Prone,\n            new Vector2(0.56f, 0.25f), new Vector2(0.68f, 0.39f), new Color(0.25f, 0.25f, 0.25f, 0.68f));\n        MakeButton(root, "MODE", MobileActionButton.ActionType.Special,\n            new Vector2(0.70f, 0.45f), new Vector2(0.80f, 0.57f), new Color(0.25f, 0.25f, 0.25f, 0.68f));\n        MakeButton(root, "RELOAD", MobileActionButton.ActionType.Reload,
+        MakeButton(root, "CROUCH", MobileActionButton.ActionType.Crouch,
+            new Vector2(0.56f, 0.09f), new Vector2(0.68f, 0.23f), new Color(0.32f, 0.32f, 0.32f, 0.68f));
+        MakeButton(root, "PRONE", MobileActionButton.ActionType.Prone,
+            new Vector2(0.56f, 0.25f), new Vector2(0.68f, 0.39f), new Color(0.25f, 0.25f, 0.25f, 0.68f));
+        MakeButton(root, "MODE", MobileActionButton.ActionType.Special,
+            new Vector2(0.70f, 0.45f), new Vector2(0.80f, 0.57f), new Color(0.25f, 0.25f, 0.25f, 0.68f));
+        MakeButton(root, "RELOAD", MobileActionButton.ActionType.Reload,
             new Vector2(0.70f, 0.29f), new Vector2(0.80f, 0.42f), new Color(0.2f, 0.2f, 0.2f, 0.7f));
         MakeButton(root, "USE", MobileActionButton.ActionType.Interact,
             new Vector2(0.83f, 0.34f), new Vector2(0.94f, 0.47f), new Color(0.2f, 0.2f, 0.2f, 0.7f));
