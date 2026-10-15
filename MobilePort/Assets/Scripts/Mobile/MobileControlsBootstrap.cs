@@ -4,8 +4,8 @@ using UnityEngine.EventSystems;
 
 /// <summary>
 /// Creates the landscape touch HUD without requiring recovered editor scenes.
-/// Attach to a scene object in the test scene. Gameplay scripts still need
-/// explicit mobile branches to consume MobileInputState.
+/// Attach to a scene object in the test scene. Recovered original gameplay
+/// scripts consume touch input through the TABZInput compatibility adapter.
 /// </summary>
 [DefaultExecutionOrder(32000)]
 public class MobileControlsBootstrap : MonoBehaviour
@@ -15,8 +15,18 @@ public class MobileControlsBootstrap : MonoBehaviour
 
     private void LateUpdate()
     {
-        // Clear one-frame inputs only after the original camera consumed look delta.
+        // Clear one-frame inputs only after gameplay and the inventory bridge ran.
         MobileInputState.ResetFrame();
+    }
+
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus) MobileInputState.ResetAll();
+    }
+
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused) MobileInputState.ResetAll();
     }
 
     private void Awake()
