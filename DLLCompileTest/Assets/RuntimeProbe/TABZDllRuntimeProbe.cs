@@ -438,7 +438,7 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
             }
 
             if (current.Length > 0)
-                current.Append('\\n');
+                current.Append('\n');
             current.Append(safeLine);
         }
 
