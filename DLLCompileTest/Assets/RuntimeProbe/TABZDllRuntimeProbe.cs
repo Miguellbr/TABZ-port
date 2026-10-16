@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
+using System.Reflection;\nusing System.Text;
 using UnityEngine;
 
 internal sealed class TABZDllRuntimeProbe : MonoBehaviour
 {
     private readonly List<string> lines = new List<string>();
+    private readonly List<string> reportParts = new List<string>();
     private Vector2 scroll;
     private string copyStatus = "";
+    private int currentPart = 0;
+    private const int MaxCharsPerPart = 3500;
 
     private static readonly string[] AssemblyNames =
     {
@@ -56,6 +59,8 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         lines.Add("- P/Invoke entries identify native calls, not proof they are invoked.");
         lines.Add("- Candidate class names are clues, not confirmed system mappings.");
         lines.Add("- This report does not prove the full game works on Android.");
+
+        BuildReportParts();
     }
 
     private void InspectAssembly(string simpleName)
@@ -405,6 +410,42 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
             lines.Add("  No type names matched.");
     }
 
+    private void BuildReportParts()
+    {
+        reportParts.Clear();
+        StringBuilder current = new StringBuilder();
+
+        foreach (string line in lines)
+        {
+            string safeLine = line ?? "";
+            int required = safeLine.Length + (current.Length > 0 ? 1 : 0);
+
+            if (current.Length > 0 && current.Length + required > MaxCharsPerPart)
+            {
+                reportParts.Add(current.ToString());
+                current.Length = 0;
+            }
+
+            while (safeLine.Length > MaxCharsPerPart)
+            {
+                if (current.Length > 0)
+                {
+                    reportParts.Add(current.ToString());
+                    current.Length = 0;
+                }
+                reportParts.Add(safeLine.Substring(0, MaxCharsPerPart));
+                safeLine = safeLine.Substring(MaxCharsPerPart);
+            }
+
+            if (current.Length > 0)
+                current.Append('\\n');
+            current.Append(safeLine);
+        }
+
+        if (current.Length > 0 || reportParts.Count == 0)
+            reportParts.Add(current.ToString());
+    }
+
     private void OnGUI()
     {
         GUI.depth = -1000;
@@ -412,16 +453,42 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         GUILayout.BeginArea(new Rect(18, 18, Screen.width - 36, Screen.height - 36));
 
         GUILayout.Label("TABZ DLL Runtime Audit", GUI.skin.GetStyle("title"));
-        if (GUILayout.Button("COPIAR RELATÓRIO COMPLETO", GUILayout.Height(48)))
+        int totalParts = Math.Max(1, reportParts.Count);
+        GUILayout.Label("PARTE " + (currentPart + 1) + " DE " + totalParts);
+
+        GUILayout.BeginHorizontal();
+        GUI.enabled = currentPart > 0;
+        if (GUILayout.Button("ANTERIOR", GUILayout.Height(46)))
         {
-            GUIUtility.systemCopyBuffer = string.Join("\n", lines.ToArray());
-            copyStatus = "Relatório copiado. Agora você pode colar aqui.";
+            currentPart--;
+            scroll = Vector2.zero;
+            copyStatus = "";
         }
+
+        GUI.enabled = true;
+        if (GUILayout.Button("COPIAR ESTA PARTE", GUILayout.Height(46)))
+        {
+            string part = reportParts.Count > currentPart ? reportParts[currentPart] : "";
+            GUIUtility.systemCopyBuffer = part;
+            copyStatus = "Parte " + (currentPart + 1) + " copiada.";
+        }
+
+        GUI.enabled = currentPart < totalParts - 1;
+        if (GUILayout.Button("PRÓXIMA", GUILayout.Height(46)))
+        {
+            currentPart++;
+            scroll = Vector2.zero;
+            copyStatus = "";
+        }
+        GUI.enabled = true;
+        GUILayout.EndHorizontal();
+
         if (!string.IsNullOrEmpty(copyStatus))
             GUILayout.Label(copyStatus);
 
         scroll = GUILayout.BeginScrollView(scroll);
-        GUILayout.Label(string.Join("\n", lines.ToArray()));
+        string visiblePart = reportParts.Count > currentPart ? reportParts[currentPart] : "Relatório ainda não disponível.";
+        GUILayout.Label(visiblePart);
         GUILayout.EndScrollView();
 
         GUILayout.EndArea();
