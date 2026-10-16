@@ -26,7 +26,7 @@ Create a separate build configuration; do not change the existing MobilePort con
 
 Run an Android build. Keep the Unity Build Automation log as well as the on-device report.
 
-After installing and opening the APK, the screen should show **TABZ DLL Runtime Audit**. Press **COPIAR RELATÓRIO COMPLETO** to copy all diagnostic text to the Android clipboard, then paste it into the conversation.
+After installing and opening the APK, the screen should show **TABZ DLL Runtime Audit** (the heading may still use the earlier short title). Press **COPIAR RELATÓRIO COMPLETO** to copy all diagnostic text to the Android clipboard, then paste it into the conversation.
 
 The runtime report includes:
 - Whether each managed assembly is loaded and its identity.
@@ -34,6 +34,12 @@ The runtime report includes:
 - Type names matching gameplay-related keywords (candidate names only; they are not automatically confirmed system mappings).
 - Methods marked as native P/Invoke, with their declared native library names when readable.
 - Reflection and method-scan errors.
+- A separate structure audit of types in Assembly-CSharp, excluding common third-party namespaces using a heuristic filter.
+- The names and base classes of types derived from MonoBehaviour (candidate Unity components).
+- Declared fields, properties, method signatures, and implemented interfaces for up to 180 project-type candidates.
+- Type-name hints for potentially platform-sensitive areas such as Windows, FMOD, Steam, Editor and DirectX.
+
+The structure section is metadata-only. It does not read method bodies, establish which scripts are attached to original prefabs/scenes, or prove that a class is used in gameplay. The namespace filter can include some demo/helper classes and should be reviewed against the original game assets.
 
 ## Interpretation limits
 
