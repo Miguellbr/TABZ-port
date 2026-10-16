@@ -45,6 +45,11 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         foreach (string assemblyName in AssemblyNames)
             InspectAssembly(assemblyName);
 
+        Assembly gameAssembly = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(a => a.GetName().Name == "Assembly-CSharp");
+        if (gameAssembly != null)
+            InspectGameStructure(gameAssembly);
+
         lines.Add("");
         lines.Add("IMPORTANT:");
         lines.Add("- Reflection inspection does not execute normal gameplay methods.");
@@ -204,6 +209,199 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
             lines.Add("  ... " + (nativeCallCount - nativeCalls.Count) + " more omitted");
         lines.Add("METHOD SCAN ERRORS: " + methodScanErrors);
         lines.Add("");
+    }
+
+
+    private static readonly string[] ExternalNamespaces =
+    {
+        "UnityEngine", "UnityEditor", "System", "Microsoft", "Mono",
+        "ExitGames", "Photon", "FMOD", "DeepSky", "Gvr", "Google",
+        "Steamworks", "AOT", "BestHTTP", "LitJson", "MiniJSON",
+        "Ionic", "Newtonsoft"
+    };
+
+    private static bool IsExternalType(Type type)
+    {
+        string ns = type.Namespace ?? "";
+        return ExternalNamespaces.Any(prefix =>
+            ns == prefix || ns.StartsWith(prefix + ".", StringComparison.Ordinal));
+    }
+
+    private static string DescribeType(Type type)
+    {
+        if (type == null) return "null";
+        if (type.IsArray) return DescribeType(type.GetElementType()) + "[]";
+        if (type.IsByRef) return DescribeType(type.GetElementType()) + "&";
+        if (type.IsPointer) return DescribeType(type.GetElementType()) + "*";
+        if (type.IsGenericType)
+        {
+            string name = type.GetGenericTypeDefinition().FullName ?? type.Name;
+            int tick = name.IndexOf('`');
+            if (tick >= 0) name = name.Substring(0, tick);
+            return name + "<" + string.Join(", ", type.GetGenericArguments().Select(DescribeType).ToArray()) + ">";
+        }
+        return type.FullName ?? type.Name;
+    }
+
+    private static string MemberVisibility(MethodBase method)
+    {
+        if (method.IsPublic) return "public";
+        if (method.IsFamily) return "protected";
+        if (method.IsAssembly) return "internal";
+        return "private";
+    }
+
+    private static string MethodDescription(MethodInfo method)
+    {
+        string args = string.Join(", ", method.GetParameters().Select(p =>
+            DescribeType(p.ParameterType) + " " + p.Name).ToArray());
+        return MemberVisibility(method) + " " + (method.IsStatic ? "static " : "") +
+            DescribeType(method.ReturnType) + " " + method.Name + "(" + args + ")";
+    }
+
+    private void InspectGameStructure(Assembly assembly)
+    {
+        lines.Add("");
+        lines.Add("==================================================");
+        lines.Add("ASSEMBLY-CSharp: ORIGINAL PROJECT STRUCTURE");
+        lines.Add("==================================================");
+
+        Type[] allTypes;
+        try
+        {
+            allTypes = assembly.GetTypes().Where(t => t != null).ToArray();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            allTypes = ex.Types.Where(t => t != null).ToArray();
+            lines.Add("WARNING: partial type list for structure scan.");
+        }
+        catch (Exception ex)
+        {
+            lines.Add("STRUCTURE SCAN FAILED: " + ex.GetType().Name + ": " + ex.Message);
+            return;
+        }
+
+        Type[] projectTypes = allTypes
+            .Where(t => !IsExternalType(t))
+            .Where(t => !(t.Name ?? "").StartsWith("<", StringComparison.Ordinal))
+            .OrderBy(t => t.FullName ?? t.Name)
+            .ToArray();
+
+        Type[] behaviours = projectTypes.Where(t =>
+        {
+            try { return t.IsClass && t.IsSubclassOf(typeof(MonoBehaviour)); }
+            catch { return false; }
+        }).ToArray();
+
+        lines.Add("TOTAL ASSEMBLY TYPES: " + allTypes.Length);
+        lines.Add("NON-EXTERNAL NAMESPACE CANDIDATES: " + projectTypes.Length);
+        lines.Add("MONOBEHAVIOUR-DERIVED TYPES: " + behaviours.Length);
+        lines.Add("");
+        lines.Add("MONOBEHAVIOUR-DERIVED TYPES:");
+        foreach (Type type in behaviours)
+            lines.Add("  COMPONENT: " + (type.FullName ?? type.Name) +
+                " | BASE: " + DescribeType(type.BaseType));
+
+        lines.Add("");
+        lines.Add("TYPE DETAILS (up to 180 types; up to 24 fields and 36 methods per type):");
+        int count = Math.Min(projectTypes.Length, 180);
+        for (int i = 0; i < count; i++)
+        {
+            Type type = projectTypes[i];
+            lines.Add("");
+            lines.Add("--------------------------------------------------");
+            lines.Add("TYPE: " + (type.FullName ?? type.Name));
+            lines.Add("KIND: " + (type.IsInterface ? "interface" : type.IsEnum ? "enum" :
+                type.IsValueType ? "struct/value type" : type.IsClass ? "class" : "other"));
+            lines.Add("BASE: " + DescribeType(type.BaseType));
+
+            try
+            {
+                Type[] interfaces = type.GetInterfaces();
+                if (interfaces.Length > 0)
+                    lines.Add("INTERFACES: " + string.Join(", ", interfaces.Select(DescribeType).ToArray()));
+            }
+            catch (Exception ex)
+            {
+                lines.Add("INTERFACES SCAN ERROR: " + ex.GetType().Name);
+            }
+
+            try
+            {
+                FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .Where(x => !x.IsSpecialName && !(x.Name ?? "").StartsWith("<", StringComparison.Ordinal))
+                    .OrderBy(x => x.Name).ToArray();
+                lines.Add("FIELDS: " + fields.Length);
+                foreach (FieldInfo field in fields.Take(24))
+                {
+                    string access = field.IsPublic ? "public" : field.IsFamily ? "protected" :
+                        field.IsAssembly ? "internal" : "private";
+                    lines.Add("  FIELD: " + access + " " + (field.IsStatic ? "static " : "") +
+                        DescribeType(field.FieldType) + " " + field.Name);
+                }
+                if (fields.Length > 24)
+                    lines.Add("  ... " + (fields.Length - 24) + " fields omitted");
+            }
+            catch (Exception ex)
+            {
+                lines.Add("FIELDS SCAN ERROR: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            try
+            {
+                PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .OrderBy(x => x.Name).ToArray();
+                lines.Add("PROPERTIES: " + properties.Length);
+                foreach (PropertyInfo property in properties.Take(12))
+                    lines.Add("  PROPERTY: " + DescribeType(property.PropertyType) + " " + property.Name);
+                if (properties.Length > 12)
+                    lines.Add("  ... " + (properties.Length - 12) + " properties omitted");
+            }
+            catch (Exception ex)
+            {
+                lines.Add("PROPERTIES SCAN ERROR: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            try
+            {
+                MethodInfo[] methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .Where(x => !x.IsSpecialName && !(x.Name ?? "").StartsWith("<", StringComparison.Ordinal))
+                    .OrderBy(x => x.Name).ToArray();
+                lines.Add("METHODS: " + methods.Length);
+                foreach (MethodInfo method in methods.Take(36))
+                    lines.Add("  METHOD: " + MethodDescription(method));
+                if (methods.Length > 36)
+                    lines.Add("  ... " + (methods.Length - 36) + " methods omitted");
+            }
+            catch (Exception ex)
+            {
+                lines.Add("METHODS SCAN ERROR: " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        if (projectTypes.Length > count)
+            lines.Add("... " + (projectTypes.Length - count) + " additional types omitted by safety limit.");
+
+        lines.Add("");
+        lines.Add("PLATFORM-SENSITIVE NAME HINTS (names only; not proof of incompatibility):");
+        string[] hints = { "Windows", "Win32", "Registry", "Process", "FMOD", "Steam", "Editor", "DirectX", "D3D" };
+        int found = 0;
+        foreach (Type type in projectTypes)
+        {
+            string name = type.FullName ?? type.Name;
+            if (hints.Any(h => name.IndexOf(h, StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                lines.Add("  HINT: " + name);
+                found++;
+                if (found >= 100) break;
+            }
+        }
+        if (found == 0)
+            lines.Add("  No type names matched.");
     }
 
     private void OnGUI()
