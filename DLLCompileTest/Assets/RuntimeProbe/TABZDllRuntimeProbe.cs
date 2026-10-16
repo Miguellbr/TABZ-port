@@ -421,7 +421,7 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
             GUILayout.Label(copyStatus);
 
         scroll = GUILayout.BeginScrollView(scroll);
-        GUILayout.Label(string.Join("\\n", lines.ToArray()));
+        GUILayout.Label(string.Join("\n", lines.ToArray()));
         GUILayout.EndScrollView();
 
         GUILayout.EndArea();
