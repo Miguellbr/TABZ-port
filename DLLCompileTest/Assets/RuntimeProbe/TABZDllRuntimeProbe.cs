@@ -82,8 +82,27 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         {
             AssemblyName[] references = assembly.GetReferencedAssemblies();
             lines.Add("REFERENCED ASSEMBLIES: " + references.Length);
+            int dependencyOk = 0;
+            int dependencyFailed = 0;
             foreach (AssemblyName reference in references.OrderBy(r => r.Name))
-                lines.Add("  REF: " + reference.FullName);
+            {
+                try
+                {
+                    Assembly resolved = AppDomain.CurrentDomain.GetAssemblies()
+                        .FirstOrDefault(a => string.Equals(a.GetName().Name, reference.Name, StringComparison.Ordinal));
+                    if (resolved == null)
+                        resolved = Assembly.Load(reference);
+                    dependencyOk++;
+                    lines.Add("  DEPENDENCY OK: " + reference.Name + " | " + resolved.GetName().Version);
+                }
+                catch (Exception dependencyError)
+                {
+                    dependencyFailed++;
+                    lines.Add("  DEPENDENCY FAILED: " + reference.FullName + " | " +
+                              dependencyError.GetType().Name + ": " + dependencyError.Message);
+                }
+            }
+            lines.Add("DEPENDENCY SUMMARY: " + dependencyOk + " resolved, " + dependencyFailed + " failed");
         }
         catch (Exception ex)
         {
