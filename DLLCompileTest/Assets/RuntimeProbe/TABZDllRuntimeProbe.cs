@@ -285,7 +285,8 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         Type[] projectTypes = allTypes
             .Where(t => !IsExternalType(t))
             .Where(t => !(t.Name ?? "").StartsWith("<", StringComparison.Ordinal))
-            .OrderBy(t => t.FullName ?? t.Name)
+            .OrderByDescending(t => t.IsClass && t.IsSubclassOf(typeof(MonoBehaviour)))
+            .ThenBy(t => t.FullName ?? t.Name)
             .ToArray();
 
         Type[] behaviours = projectTypes.Where(t =>
@@ -304,8 +305,8 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
                 " | BASE: " + DescribeType(type.BaseType));
 
         lines.Add("");
-        lines.Add("TYPE DETAILS (up to 180 types; up to 24 fields and 36 methods per type):");
-        int count = Math.Min(projectTypes.Length, 180);
+        lines.Add("TYPE DETAILS (up to 120 types; up to 16 fields and 24 methods per type):");
+        int count = Math.Min(projectTypes.Length, 120);
         for (int i = 0; i < count; i++)
         {
             Type type = projectTypes[i];
@@ -334,15 +335,15 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
                     .Where(x => !x.IsSpecialName && !(x.Name ?? "").StartsWith("<", StringComparison.Ordinal))
                     .OrderBy(x => x.Name).ToArray();
                 lines.Add("FIELDS: " + fields.Length);
-                foreach (FieldInfo field in fields.Take(24))
+                foreach (FieldInfo field in fields.Take(16))
                 {
                     string access = field.IsPublic ? "public" : field.IsFamily ? "protected" :
                         field.IsAssembly ? "internal" : "private";
                     lines.Add("  FIELD: " + access + " " + (field.IsStatic ? "static " : "") +
                         DescribeType(field.FieldType) + " " + field.Name);
                 }
-                if (fields.Length > 24)
-                    lines.Add("  ... " + (fields.Length - 24) + " fields omitted");
+                if (fields.Length > 16)
+                    lines.Add("  ... " + (fields.Length - 16) + " fields omitted");
             }
             catch (Exception ex)
             {
@@ -355,10 +356,10 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
                     BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                     .OrderBy(x => x.Name).ToArray();
                 lines.Add("PROPERTIES: " + properties.Length);
-                foreach (PropertyInfo property in properties.Take(12))
+                foreach (PropertyInfo property in properties.Take(8))
                     lines.Add("  PROPERTY: " + DescribeType(property.PropertyType) + " " + property.Name);
-                if (properties.Length > 12)
-                    lines.Add("  ... " + (properties.Length - 12) + " properties omitted");
+                if (properties.Length > 8)
+                    lines.Add("  ... " + (properties.Length - 8) + " properties omitted");
             }
             catch (Exception ex)
             {
@@ -372,10 +373,10 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
                     .Where(x => !x.IsSpecialName && !(x.Name ?? "").StartsWith("<", StringComparison.Ordinal))
                     .OrderBy(x => x.Name).ToArray();
                 lines.Add("METHODS: " + methods.Length);
-                foreach (MethodInfo method in methods.Take(36))
+                foreach (MethodInfo method in methods.Take(24))
                     lines.Add("  METHOD: " + MethodDescription(method));
-                if (methods.Length > 36)
-                    lines.Add("  ... " + (methods.Length - 36) + " methods omitted");
+                if (methods.Length > 24)
+                    lines.Add("  ... " + (methods.Length - 24) + " methods omitted");
             }
             catch (Exception ex)
             {
@@ -420,8 +421,7 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
             GUILayout.Label(copyStatus);
 
         scroll = GUILayout.BeginScrollView(scroll);
-        foreach (string line in lines)
-            GUILayout.Label(line);
+        GUILayout.Label(string.Join("\\n", lines.ToArray()));
         GUILayout.EndScrollView();
 
         GUILayout.EndArea();
