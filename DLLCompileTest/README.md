@@ -30,7 +30,7 @@ After installing and opening the APK, the screen should show **TABZ DLL Runtime 
 
 The runtime report includes:
 - Whether each managed assembly is loaded and its identity.
-- All assembly references declared by each DLL.
+- All assembly references declared by each DLL, with an attempt to resolve each dependency in the Android runtime.
 - Type names matching gameplay-related keywords (candidate names only; they are not automatically confirmed system mappings).
 - Methods marked as native P/Invoke, with their declared native library names when readable.
 - Reflection and method-scan errors.
