@@ -36,7 +36,7 @@ The runtime report includes:
 - Reflection and method-scan errors.
 - A separate structure audit of types in Assembly-CSharp, excluding common third-party namespaces using a heuristic filter.
 - The names and base classes of types derived from MonoBehaviour (candidate Unity components).
-- Declared fields, properties, method signatures, and implemented interfaces for up to 180 project-type candidates.
+- Declared fields, properties, method signatures, and implemented interfaces for up to 120 project-type candidates, prioritizing MonoBehaviour-derived types.
 - Type-name hints for potentially platform-sensitive areas such as Windows, FMOD, Steam, Editor and DirectX.
 
 The structure section is metadata-only. It does not read method bodies, establish which scripts are attached to original prefabs/scenes, or prove that a class is used in gameplay. The namespace filter can include some demo/helper classes and should be reviewed against the original game assets.
