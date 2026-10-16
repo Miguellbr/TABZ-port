@@ -24,9 +24,9 @@ Create a separate build configuration; do not change the existing MobilePort con
 - Editor: `2022.3.62f1`
 - Target: Android / ARM64
 
-Run an Android build. The first useful result is the Unity import/compilation log, not whether a playable APK starts. This project has an empty probe scene by design.
+Run an Android build. The first useful result is the Unity import/compilation log, not whether a playable APK starts. The probe scene is intentionally minimal. A runtime diagnostic component is initialized automatically after the scene loads and draws its results on screen.
 
-After the project opens, use **TABZ DLL Probe > Run diagnostics** in the Unity Editor menu. The Console reports whether each managed assembly was loaded. Import or compiler errors should be treated as the test result; do not copy any of these DLLs into MobilePort until the result is understood.
+After the Android APK is installed and opened, the screen should show **TABZ DLL Runtime Probe**. It reports whether `Photon3Unity3D`, `Assembly-CSharp-firstpass`, and `Assembly-CSharp` are visible to the Android runtime and whether their types can be enumerated. Also retain the Unity Build Automation log. The Editor menu **TABZ DLL Probe > Run diagnostics** remains available for Editor-side checks.
 
 ## Interpretation
 
