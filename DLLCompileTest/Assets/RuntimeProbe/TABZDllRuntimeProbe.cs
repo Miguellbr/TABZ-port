@@ -218,6 +218,21 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
     }
 
 
+    private static readonly string[] PriorityGameplayTypes =
+    {
+        "PlayerHandler", "myThirdPersonController", "ThirdPersonController",
+        "MovementHandler", "ThirdPersonNetwork", "NetworkCharacter",
+        "HealthHandler", "PhysicsAmimationController", "BalanceHandler",
+        "StandHandler", "JointAnimation", "JointAnimationExtended",
+        "WeaponHandler", "Weapon", "MeleeWeapon", "RaycastProjectile",
+        "ProjectileHit", "InventoryService", "InventoryItem",
+        "InventoryItemWeapon", "InventoryItemAmmo", "UIInventory",
+        "UIInventoryItem", "UIInventoryTooltip", "NetworkZombie",
+        "ZombieSpawner", "NetworkZombieSpawner", "ZombieFighting",
+        "ZombieBlackboard", "GameLogic", "MainMenuHandler",
+        "CameraMovement", "PlayerInteraction", "SpawnPointManager"
+    };
+
     private static readonly string[] ExternalNamespaces =
     {
         "UnityEngine", "UnityEditor", "System", "Microsoft", "Mono",
@@ -309,6 +324,26 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         foreach (Type type in behaviours)
             lines.Add("  COMPONENT: " + (type.FullName ?? type.Name) +
                 " | BASE: " + DescribeType(type.BaseType));
+
+        lines.Add("");
+        lines.Add("PRIORITY GAMEPLAY TYPE DETAILS (targeted classes; up to 40 fields and 80 methods each):");
+        int priorityFound = 0;
+        foreach (string priorityName in PriorityGameplayTypes)
+        {
+            Type type = projectTypes.FirstOrDefault(t =>
+                string.Equals(t.Name, priorityName, StringComparison.Ordinal));
+            if (type == null)
+            {
+                lines.Add("");
+                lines.Add("TARGET NOT FOUND: " + priorityName);
+                continue;
+            }
+
+            priorityFound++;
+            AppendDetailedType(type, 40, 80);
+        }
+        lines.Add("");
+        lines.Add("PRIORITY TARGETS FOUND: " + priorityFound + " / " + PriorityGameplayTypes.Length);
 
         lines.Add("");
         lines.Add("TYPE DETAILS (up to 120 types; up to 16 fields and 24 methods per type):");
@@ -409,6 +444,69 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         }
         if (found == 0)
             lines.Add("  No type names matched.");
+    }
+
+    private void AppendDetailedType(Type type, int fieldLimit, int methodLimit)
+    {
+        lines.Add("");
+        lines.Add("--------------------------------------------------");
+        lines.Add("PRIORITY TYPE: " + (type.FullName ?? type.Name));
+        lines.Add("BASE: " + DescribeType(type.BaseType));
+
+        try
+        {
+            FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(x => !x.IsSpecialName && !(x.Name ?? "").StartsWith("<", StringComparison.Ordinal))
+                .OrderBy(x => x.Name).ToArray();
+            lines.Add("FIELDS: " + fields.Length);
+            foreach (FieldInfo field in fields.Take(fieldLimit))
+            {
+                string access = field.IsPublic ? "public" : field.IsFamily ? "protected" :
+                    field.IsAssembly ? "internal" : "private";
+                lines.Add("  FIELD: " + access + " " + (field.IsStatic ? "static " : "") +
+                    DescribeType(field.FieldType) + " " + field.Name);
+            }
+            if (fields.Length > fieldLimit)
+                lines.Add("  ... " + (fields.Length - fieldLimit) + " fields omitted");
+        }
+        catch (Exception ex)
+        {
+            lines.Add("FIELDS SCAN ERROR: " + ex.GetType().Name + ": " + ex.Message);
+        }
+
+        try
+        {
+            PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .OrderBy(x => x.Name).ToArray();
+            lines.Add("PROPERTIES: " + properties.Length);
+            foreach (PropertyInfo property in properties.Take(24))
+                lines.Add("  PROPERTY: " + DescribeType(property.PropertyType) + " " + property.Name);
+            if (properties.Length > 24)
+                lines.Add("  ... " + (properties.Length - 24) + " properties omitted");
+        }
+        catch (Exception ex)
+        {
+            lines.Add("PROPERTIES SCAN ERROR: " + ex.GetType().Name + ": " + ex.Message);
+        }
+
+        try
+        {
+            MethodInfo[] methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(x => !x.IsSpecialName && !(x.Name ?? "").StartsWith("<", StringComparison.Ordinal))
+                .OrderBy(x => x.Name).ToArray();
+            lines.Add("METHODS: " + methods.Length);
+            foreach (MethodInfo method in methods.Take(methodLimit))
+                lines.Add("  METHOD: " + MethodDescription(method));
+            if (methods.Length > methodLimit)
+                lines.Add("  ... " + (methods.Length - methodLimit) + " methods omitted");
+        }
+        catch (Exception ex)
+        {
+            lines.Add("METHODS SCAN ERROR: " + ex.GetType().Name + ": " + ex.Message);
+        }
     }
 
     private void BuildReportParts()
