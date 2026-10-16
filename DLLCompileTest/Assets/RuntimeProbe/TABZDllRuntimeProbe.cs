@@ -49,6 +49,8 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         foreach (string assemblyName in AssemblyNames)
             InspectAssembly(assemblyName);
 
+        InspectFmodVersionMetadata();
+
         Assembly gameAssembly = AppDomain.CurrentDomain.GetAssemblies()
             .FirstOrDefault(a => a.GetName().Name == "Assembly-CSharp");
         if (gameAssembly != null)
@@ -62,6 +64,77 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
         lines.Add("- This report does not prove the full game works on Android.");
 
         BuildReportParts();
+    }
+
+
+    private void InspectFmodVersionMetadata()
+    {
+        lines.Add("");
+        lines.Add("==================================================");
+        lines.Add("FMOD VERSION METADATA (no native calls executed)");
+        lines.Add("==================================================");
+
+        string[] targetTypes = { "FMOD.VERSION", "FMOD.Studio.VERSION" };
+        Assembly[] loaded = AppDomain.CurrentDomain.GetAssemblies();
+
+        foreach (string typeName in targetTypes)
+        {
+            Type type = null;
+            foreach (Assembly assembly in loaded)
+            {
+                try
+                {
+                    type = assembly.GetType(typeName, false);
+                    if (type != null) break;
+                }
+                catch { }
+            }
+
+            if (type == null)
+            {
+                lines.Add("TYPE NOT FOUND: " + typeName);
+                continue;
+            }
+
+            lines.Add("TYPE FOUND: " + type.FullName + " | ASSEMBLY: " + type.Assembly.GetName().Name);
+
+            try
+            {
+                FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                foreach (FieldInfo field in fields)
+                {
+                    string value = "<not constant>";
+                    try
+                    {
+                        if (field.IsLiteral) value = Convert.ToString(field.GetRawConstantValue());
+                        else if (field.IsStatic) value = Convert.ToString(field.GetValue(null));
+                    }
+                    catch (Exception ex) { value = "<read failed: " + ex.GetType().Name + ">"; }
+                    lines.Add("  FIELD: " + field.Name + " | " + DescribeType(field.FieldType) + " | " + value);
+                }
+            }
+            catch (Exception ex)
+            {
+                lines.Add("  FIELD SCAN FAILED: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            try
+            {
+                PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                foreach (PropertyInfo property in properties)
+                    lines.Add("  PROPERTY: " + property.Name + " | " + DescribeType(property.PropertyType));
+            }
+            catch (Exception ex)
+            {
+                lines.Add("  PROPERTY SCAN FAILED: " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        foreach (Assembly assembly in loaded.Where(a =>
+            (a.GetName().Name ?? "").IndexOf("FMOD", StringComparison.OrdinalIgnoreCase) >= 0))
+            lines.Add("FMOD ASSEMBLY: " + assembly.FullName);
     }
 
     private void InspectAssembly(string simpleName)
