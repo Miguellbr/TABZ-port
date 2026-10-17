@@ -18,6 +18,7 @@ internal sealed class TABZDllRuntimeProbe : MonoBehaviour
     {
         "Photon3Unity3D",
         "Assembly-CSharp-firstpass",
+        "TabzInputShim",
         "Assembly-CSharp"
     };
 
