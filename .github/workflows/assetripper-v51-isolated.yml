@@ -1,0 +1,122 @@
+name: TABZ v5.1 isolated Unity project recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install archive tools
+        run: python -m pip install --upgrade gdown py7zr
+
+      - name: Download original TABZ v5.1 archive
+        run: |
+          mkdir -p downloads extracted output
+          gdown --folder "https://drive.google.com/drive/folders/1Y9vmCWr31-b1du0SFkKop7DODTL9Qvoc?usp=drive_link" -O downloads
+          python - <<'PY'
+          import pathlib, shutil
+          files = [p for p in pathlib.Path("downloads").rglob("*") if p.is_file() and p.suffix.lower() in {".zip", ".7z"} and p.name.lower() not in {"source.zip", "source.7z"}]
+          selected = [p for p in files if "5.1" in p.name.lower() or "v5" in p.name.lower()]
+          if len(selected) != 1:
+              raise SystemExit("Could not uniquely select TABZ v5.1 archive. Found: " + ", ".join(str(p) for p in files))
+          target = pathlib.Path("downloads") / ("source" + selected[0].suffix.lower())
+          if selected[0].resolve() != target.resolve():
+              shutil.copy2(selected[0], target)
+          print("Selected:", selected[0].name, "bytes:", selected[0].stat().st_size)
+          PY
+
+      - name: Extract original archive
+        run: |
+          python - <<'PY'
+          import pathlib, zipfile, py7zr
+          archive = next(pathlib.Path("downloads").glob("source.*"))
+          dest = pathlib.Path("extracted/game")
+          dest.mkdir(parents=True, exist_ok=True)
+          if archive.suffix.lower() == ".zip":
+              with zipfile.ZipFile(archive) as z:
+                  for item in z.infolist():
+                      rel = pathlib.PurePosixPath(item.filename.replace("\\\\", "/"))
+                      if rel.is_absolute() or ".." in rel.parts:
+                          raise RuntimeError("Unsafe archive path: " + item.filename)
+                  z.extractall(dest)
+          else:
+              with py7zr.SevenZipFile(archive) as z:
+                  for name in z.getnames():
+                      rel = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                      if rel.is_absolute() or ".." in rel.parts:
+                          raise RuntimeError("Unsafe archive path: " + name)
+                  z.extractall(path=dest)
+          PY
+
+      - name: Locate Unity data folder and audit source
+        run: |
+          python - <<'PY'
+          import pathlib
+          root = pathlib.Path("extracted/game")
+          data_dirs = [p for p in root.rglob("*_Data") if p.is_dir() and (p / "globalgamemanagers").is_file()]
+          if len(data_dirs) != 1:
+              raise SystemExit("Expected exactly one Unity *_Data folder; found: " + ", ".join(map(str, data_dirs)))
+          game = data_dirs[0].parent
+          pathlib.Path("output/assetripper-input.txt").write_text(str(game.resolve()) + "\\n")
+          markers = sorted(p.relative_to(game).as_posix() for p in game.rglob("*") if p.is_file() and p.name.lower() in {"globalgamemanagers", "level0", "level1"})
+          pathlib.Path("output/source-scenes-and-data.txt").write_text("\\n".join(markers) + "\\n")
+          print("AssetRipper input:", game)
+          print("Unity data markers:", *markers, sep="\\n")
+          PY
+
+      - name: Download AssetRipper CLI
+        run: |
+          curl -fL --retry 3 "https://github.com/nowl-it/AssetRipperCLI/releases/download/v1.0.1/AssetRipper_linux_x64.zip" -o /tmp/assetripper.zip
+          mkdir -p /tmp/assetripper
+          unzip -q /tmp/assetripper.zip -d /tmp/assetripper
+          BIN="$(find /tmp/assetripper -type f | grep -Ei '/(AssetRipper|AssetRipperCLI|assetripper|AssetRipper[.]GUI[.]Free)$' | head -n 1)"
+          if [ -z "$BIN" ]; then
+            echo "::error::Could not find AssetRipper executable"
+            exit 1
+          fi
+          chmod +x "$BIN"
+          echo "ASSET_RIPPER_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --help
+
+      - name: Recover v5.1 Unity project
+        run: |
+          "$ASSET_RIPPER_BIN" --cli \\
+            --input "$(cat "$GITHUB_WORKSPACE/output/assetripper-input.txt")" \\
+            --output "$GITHUB_WORKSPACE/output/v5.1" \\
+            --mode "Unity" \\
+            --script-content-level Level2 \\
+            --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
+
+      - name: Summarize recovered project
+        if: always()
+        run: |
+          python - <<'PY'
+          import pathlib
+          root = pathlib.Path("output")
+          project = root / "v5.1" / "ExportedProject"
+          assets = project / "Assets"
+          files = [p for p in assets.rglob("*") if p.is_file()] if assets.exists() else []
+          scenes = [p.relative_to(assets).as_posix() for p in assets.rglob("*.unity")] if assets.exists() else []
+          prefabs = [p.relative_to(assets).as_posix() for p in assets.rglob("*.prefab")] if assets.exists() else []
+          lines = ["# TABZ v5.1 isolated recovery", "", f"- Assets files: {len(files)}", f"- Unity scenes: {len(scenes)}", f"- Prefabs: {len(prefabs)}", f"- Assets size: {sum(p.stat().st_size for p in files) / (1024*1024):.1f} MiB", "", "## Scenes", *[f"- {p}" for p in scenes[:500]], "", "## Prefabs (first 500)", *[f"- {p}" for p in prefabs[:500]]]
+          (root / "RECOVERY-REPORT.md").write_text("\\n".join(lines) + "\\n")
+          print("\\n".join(lines[:80]))
+          PY
+          cat output/RECOVERY-REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload isolated Unity project
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-v5.1-unity-project-isolated
+          path: output/
+          if-no-files-found: warn
+          compression-level: 1
+          retention-days: 7
