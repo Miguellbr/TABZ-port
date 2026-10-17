@@ -1,0 +1,11 @@
+INPUT: orig/TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+OUTPUT: out/Assembly-CSharp-firstpass.dll
+REDIRECTED CALLS: 0
+
+REDIRECTED BY METHOD:
+
+REDIRECTED BY TYPE:
+
+UNMAPPED Input CALLS (left untouched, need a shim method if they matter):
+  (none)
+NOTE: no Input calls found in this assembly; output not written.
