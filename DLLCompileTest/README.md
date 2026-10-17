@@ -21,8 +21,8 @@ Create a separate build configuration; do not change the existing MobilePort con
 - Repository: \`Miguellbr/TABZ-port\`
 - Branch: \`audit/unity-dll-compile\`
 - Unity project subfolder: \`DLLCompileTest\`
-- Editor: use the Unity 2022.3.62 version selected for this build
-- Target: Android / ARM64
+- Editor: Unity 2022.3.62f1
+- Target: Android / ARMv7 (32-bit), matching the available FMOD 1.09.03 native package
 
 Run an Android build. Keep the Unity Build Automation log as well as the on-device report.
 
