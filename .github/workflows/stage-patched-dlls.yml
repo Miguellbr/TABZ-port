@@ -1,0 +1,90 @@
+name: Stage patched TABZ DLLs for Unity audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "GitHub Actions run ID that contains tabz-il-patched-input"
+        required: true
+        default: "39066510258"
+      artifact_name:
+        description: "Artifact name"
+        required: true
+        default: "tabz-il-patched-input"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download patched DLL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          path: downloaded
+
+      - name: Checkout isolated Unity audit branch
+        uses: actions/checkout@v4
+        with:
+          ref: audit/unity-dll-compile
+          path: audit
+          fetch-depth: 0
+
+      - name: Validate and stage patched assemblies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s downloaded/Assembly-CSharp.dll
+          test -s downloaded/TabzInputShim.dll
+          test -s downloaded/report-Assembly-CSharp.txt
+          grep -q "CONFIRMED TabzInput CALLS IN OUTPUT FILE: 117" downloaded/report-Assembly-CSharp.txt
+
+          plugins="audit/DLLCompileTest/Assets/Plugins/Managed"
+          test -s "$plugins/Assembly-CSharp-firstpass.dll"
+          test -s "$plugins/Photon3Unity3D.dll"
+          cp downloaded/Assembly-CSharp.dll "$plugins/Assembly-CSharp.dll"
+          cp downloaded/TabzInputShim.dll "$plugins/TabzInputShim.dll"
+
+          guid="$(cat /proc/sys/kernel/random/uuid | tr -d '-')"
+          cat > "$plugins/TabzInputShim.dll.meta" <<EOF
+          fileFormatVersion: 2
+          guid: $guid
+          PluginImporter:
+            externalObjects: {}
+            serializedVersion: 2
+            iconMap: {}
+            executionOrder: {}
+            defineConstraints: []
+            isPreloaded: 0
+            isOverridable: 0
+            isExplicitlyReferenced: 0
+            validateReferences: 1
+            platformData:
+            - first:
+                Any:
+              second:
+                enabled: 1
+                settings: {}
+            userData:
+            assetBundleName:
+            assetBundleVariant:
+          EOF
+
+          cp downloaded/report-Assembly-CSharp.txt audit/DLLCompileTest/
+          cp downloaded/report-Assembly-CSharp-firstpass.txt audit/DLLCompileTest/
+
+          git -C audit config user.name "github-actions[bot]"
+          git -C audit config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C audit add DLLCompileTest/Assets/Plugins/Managed/Assembly-CSharp.dll \
+            DLLCompileTest/Assets/Plugins/Managed/TabzInputShim.dll \
+            DLLCompileTest/Assets/Plugins/Managed/TabzInputShim.dll.meta \
+            DLLCompileTest/report-Assembly-CSharp.txt \
+            DLLCompileTest/report-Assembly-CSharp-firstpass.txt
+          git -C audit commit -m "Stage patched input assemblies for Unity audit"
+          git -C audit push origin HEAD:audit/patched-input-runtime
