@@ -47,3 +47,12 @@ The structure section is metadata-only. It does not read method bodies, establis
 - This deeper scan inspects metadata. It does not intentionally invoke ordinary gameplay methods or initialize game systems.
 - P/Invoke entries identify native calls declared by the assembly; they do not prove those calls are executed during startup.
 - A successful metadata scan does not prove gameplay runtime compatibility, Android availability of native libraries, or that Windows Steam/FM0D functionality works on Android.
+
+
+## DLL MonoScript inventory (next diagnostic build)
+
+The Editor build preprocessor `TABZDllMonoScriptInventory` inspects MonoScript sub-assets exposed by the managed DLLs under `Assets/Plugins/Managed`. It records each type's assembly, DLL asset GUID, and local file ID. The generated report is included in the Android diagnostic app and displayed in its existing report UI.
+
+This is a read-only inventory step: it does not rewrite scenes, change component references, remove the missing WorldCreatorEngine component, or claim that a DLL mapping is valid before the report is inspected.
+
+To run it, build the existing Unity Build Automation target against branch `audit/patched-input-runtime`, project subfolder `DLLCompileTest`, Unity `2022.3.62f1`, Android. Install and open the new diagnostic APK, then copy the report and send the section titled **EDITOR-GENERATED DLL MONOSCRIPT INVENTORY**. If it says the inventory was not found, the build preprocessor did not generate/include the resource and we should diagnose that before changing any scene.
