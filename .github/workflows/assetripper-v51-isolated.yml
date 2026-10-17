@@ -42,14 +42,14 @@ jobs:
           if archive.suffix.lower() == ".zip":
               with zipfile.ZipFile(archive) as z:
                   for item in z.infolist():
-                      rel = pathlib.PurePosixPath(item.filename.replace("\\\\", "/"))
+                      rel = pathlib.PurePosixPath(item.filename.replace("\\", "/"))
                       if rel.is_absolute() or ".." in rel.parts:
                           raise RuntimeError("Unsafe archive path: " + item.filename)
                   z.extractall(dest)
           else:
               with py7zr.SevenZipFile(archive) as z:
                   for name in z.getnames():
-                      rel = pathlib.PurePosixPath(name.replace("\\\\", "/"))
+                      rel = pathlib.PurePosixPath(name.replace("\\", "/"))
                       if rel.is_absolute() or ".." in rel.parts:
                           raise RuntimeError("Unsafe archive path: " + name)
                   z.extractall(path=dest)
@@ -64,11 +64,11 @@ jobs:
           if len(data_dirs) != 1:
               raise SystemExit("Expected exactly one Unity *_Data folder; found: " + ", ".join(map(str, data_dirs)))
           game = data_dirs[0].parent
-          pathlib.Path("output/assetripper-input.txt").write_text(str(game.resolve()) + "\\n")
+          pathlib.Path("output/assetripper-input.txt").write_text(str(game.resolve()) + "\n")
           markers = sorted(p.relative_to(game).as_posix() for p in game.rglob("*") if p.is_file() and p.name.lower() in {"globalgamemanagers", "level0", "level1"})
-          pathlib.Path("output/source-scenes-and-data.txt").write_text("\\n".join(markers) + "\\n")
+          pathlib.Path("output/source-scenes-and-data.txt").write_text("\n".join(markers) + "\n")
           print("AssetRipper input:", game)
-          print("Unity data markers:", *markers, sep="\\n")
+          print("Unity data markers:", *markers, sep="\n")
           PY
 
       - name: Download AssetRipper CLI
@@ -87,11 +87,11 @@ jobs:
 
       - name: Recover v5.1 Unity project
         run: |
-          "$ASSET_RIPPER_BIN" --cli \\
-            --input "$(cat "$GITHUB_WORKSPACE/output/assetripper-input.txt")" \\
-            --output "$GITHUB_WORKSPACE/output/v5.1" \\
-            --mode "Unity" \\
-            --script-content-level Level2 \\
+          "$ASSET_RIPPER_BIN" --cli \
+            --input "$(cat "$GITHUB_WORKSPACE/output/assetripper-input.txt")" \
+            --output "$GITHUB_WORKSPACE/output/v5.1" \
+            --mode "Unity" \
+            --script-content-level Level2 \
             --log-path "$GITHUB_WORKSPACE/output/assetripper.log"
 
       - name: Summarize recovered project
@@ -106,8 +106,8 @@ jobs:
           scenes = [p.relative_to(assets).as_posix() for p in assets.rglob("*.unity")] if assets.exists() else []
           prefabs = [p.relative_to(assets).as_posix() for p in assets.rglob("*.prefab")] if assets.exists() else []
           lines = ["# TABZ v5.1 isolated recovery", "", f"- Assets files: {len(files)}", f"- Unity scenes: {len(scenes)}", f"- Prefabs: {len(prefabs)}", f"- Assets size: {sum(p.stat().st_size for p in files) / (1024*1024):.1f} MiB", "", "## Scenes", *[f"- {p}" for p in scenes[:500]], "", "## Prefabs (first 500)", *[f"- {p}" for p in prefabs[:500]]]
-          (root / "RECOVERY-REPORT.md").write_text("\\n".join(lines) + "\\n")
-          print("\\n".join(lines[:80]))
+          (root / "RECOVERY-REPORT.md").write_text("\n".join(lines) + "\n")
+          print("\n".join(lines[:80]))
           PY
           cat output/RECOVERY-REPORT.md >> "$GITHUB_STEP_SUMMARY"
 
