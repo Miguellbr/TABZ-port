@@ -1,0 +1,53 @@
+name: IL stub native libraries (Steam, optional FMOD)
+
+on:
+  push:
+    branches: [tools/il-patch-input]
+    paths:
+      - 'Tools/IlStub/**'
+      - '.github/workflows/il-stub-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tools
+        uses: actions/checkout@v4
+
+      - name: Checkout original v5.1 managed assemblies
+        uses: actions/checkout@v4
+        with:
+          ref: tabz-v5.1
+          path: orig
+          fetch-depth: 1
+          sparse-checkout: |
+            TABZ/TABZ modded v5/GAME_Data/Managed
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build stubber
+        run: dotnet build Tools/IlStub/IlStub.csproj -c Release -o build/stub
+
+      - name: Stub Steam (and a silent FMOD variant)
+        run: |
+          set -euo pipefail
+          M="orig/TABZ/TABZ modded v5/GAME_Data/Managed"
+          mkdir -p out/silent
+          dotnet build/stub/TabzIlStub.dll "$M/Assembly-CSharp-firstpass.dll" out/Assembly-CSharp-firstpass.dll "$M" --steam --require-hits | tee out/report-steam.txt
+          dotnet build/stub/TabzIlStub.dll "$M/Assembly-CSharp-firstpass.dll" out/silent/Assembly-CSharp-firstpass.dll "$M" --steam --fmod-silent --require-hits | tee out/report-steam-fmod-silent.txt
+          ls -la out out/silent
+
+      - name: Upload stubbed assemblies
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-il-stubbed-native
+          path: out/
+          retention-days: 14
