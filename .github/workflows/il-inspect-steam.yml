@@ -1,0 +1,59 @@
+name: IL inspect Steam and native libraries
+
+on:
+  push:
+    branches: [tools/il-patch-input]
+    paths:
+      - 'Tools/IlInspect/**'
+      - '.github/workflows/il-inspect-steam.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tools
+        uses: actions/checkout@v4
+
+      - name: Checkout original v5.1 managed assemblies
+        uses: actions/checkout@v4
+        with:
+          ref: tabz-v5.1
+          path: orig
+          fetch-depth: 1
+          sparse-checkout: |
+            TABZ/TABZ modded v5/GAME_Data/Managed
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build inspector
+        run: dotnet build Tools/IlInspect/IlInspect.csproj -c Release -o build/inspect
+
+      - name: Inspect assemblies
+        run: |
+          set -euo pipefail
+          M="orig/TABZ/TABZ modded v5/GAME_Data/Managed"
+          mkdir -p out
+          dotnet build/inspect/TabzIlInspect.dll "$M/Assembly-CSharp-firstpass.dll" "$M" out/inspect-firstpass.txt > /dev/null
+          dotnet build/inspect/TabzIlInspect.dll "$M/Assembly-CSharp.dll" "$M" out/inspect-assembly-csharp.txt > /dev/null
+          wc -l out/*.txt
+
+      - name: Print report (Assembly-CSharp)
+        run: cat out/inspect-assembly-csharp.txt
+
+      - name: Print report (firstpass)
+        run: cat out/inspect-firstpass.txt
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-il-inspect
+          path: out/
+          retention-days: 14
