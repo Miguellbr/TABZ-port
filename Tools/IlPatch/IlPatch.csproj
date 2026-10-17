@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>TabzIlPatch</AssemblyName>
+    <RootNamespace>TabzIlPatch</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- TabzInput.cs is compiled separately against the original UnityEngine.dll; keep it out of this project. -->
+    <Compile Remove="TabzInput.cs" />
+    <PackageReference Include="Mono.Cecil" Version="0.11.5" />
+  </ItemGroup>
+
+</Project>

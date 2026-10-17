@@ -1,0 +1,78 @@
+name: IL patch original input (Mono.Cecil)
+
+on:
+  push:
+    branches: [tools/il-patch-input]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tools
+        uses: actions/checkout@v4
+
+      - name: Checkout original v5.1 managed assemblies
+        uses: actions/checkout@v4
+        with:
+          ref: tabz-v5.1
+          path: orig
+          fetch-depth: 1
+          sparse-checkout: |
+            TABZ/TABZ modded v5/GAME_Data/Managed
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build patcher
+        run: dotnet build Tools/IlPatch/IlPatch.csproj -c Release -o build/patcher
+
+      - name: Compile TabzInputShim against the original UnityEngine
+        run: |
+          set -euo pipefail
+          M="orig/TABZ/TABZ modded v5/GAME_Data/Managed"
+          ls -la "$M"
+          read -r VER SDKDIR <<< "$(dotnet --list-sdks | tail -1 | sed -E 's/^([^ ]+) \[(.*)\]$/\1 \2/')"
+          CSC="$SDKDIR/$VER/Roslyn/bincore/csc.dll"
+          echo "Using $CSC"
+          mkdir -p out
+          dotnet "$CSC" -nologo -noconfig -nostdlib+ -target:library -optimize+ \
+            -out:out/TabzInputShim.dll \
+            -reference:"$M/mscorlib.dll" -reference:"$M/UnityEngine.dll" \
+            Tools/IlPatch/TabzInput.cs
+          ls -la out
+
+      - name: Patch Assembly-CSharp and Assembly-CSharp-firstpass
+        run: |
+          set -euo pipefail
+          M="orig/TABZ/TABZ modded v5/GAME_Data/Managed"
+          dotnet build/patcher/TabzIlPatch.dll "$M/Assembly-CSharp.dll" out/TabzInputShim.dll out/Assembly-CSharp.dll "$M" --require-hits | tee out/report-Assembly-CSharp.txt
+          dotnet build/patcher/TabzIlPatch.dll "$M/Assembly-CSharp-firstpass.dll" out/TabzInputShim.dll out/Assembly-CSharp-firstpass.dll "$M" | tee out/report-Assembly-CSharp-firstpass.txt
+          ls -la out
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo '## IL patch report'
+            for f in out/report-*.txt; do
+              [ -f "$f" ] || continue
+              echo "### $f"
+              echo '```'
+              cat "$f"
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload patched assemblies
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-il-patched-input
+          path: out/
+          retention-days: 14
