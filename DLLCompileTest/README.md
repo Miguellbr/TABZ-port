@@ -43,7 +43,7 @@ The structure section is metadata-only. It does not read method bodies, establis
 
 ## Interpretation limits
 
-- The previous successful test showed that all three managed assemblies were visible and their types enumerable on Android.
+- The previous successful baseline test showed that all three original managed assemblies were visible and their types enumerable on Android. The patched-input branch adds `TabzInputShim.dll` and replaces `Assembly-CSharp.dll`; it must be tested separately.
 - This deeper scan inspects metadata. It does not intentionally invoke ordinary gameplay methods or initialize game systems.
 - P/Invoke entries identify native calls declared by the assembly; they do not prove those calls are executed during startup.
 - A successful metadata scan does not prove gameplay runtime compatibility, Android availability of native libraries, or that Windows Steam/FM0D functionality works on Android.
