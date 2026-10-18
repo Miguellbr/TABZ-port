@@ -1,0 +1,63 @@
+name: TABZ DLL MonoScript inventory (Android diagnostic)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check Unity license secrets
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [ -z "$UNITY_LICENSE" ] || [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ]; then
+            echo "::error::Missing required Unity Actions secrets: UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD."
+            echo "This workflow uses the same Unity license secrets as the existing Android prototype workflow."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: audit/patched-input-runtime
+
+      - name: Build diagnostic APK and generate MonoScript inventory
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: DLLCompileTest
+          unityVersion: 2022.3.62f1
+          targetPlatform: Android
+          buildMethod: TABZDllInventoryBuild.BuildAndroid
+          allowDirtyBuild: true
+
+      - name: Verify generated inventory report
+        shell: bash
+        run: |
+          REPORT="DLLCompileTest/Assets/Resources/TABZDllMonoScriptInventory.txt"
+          if [ ! -s "$REPORT" ]; then
+            echo "::error::Unity did not generate the MonoScript inventory report."
+            exit 1
+          fi
+          echo "Inventory report generated:"
+          sed -n '1,240p' "$REPORT"
+
+      - name: Upload diagnostic APK and readable report
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-dll-monoscript-inventory
+          path: |
+            DLLCompileTest/Builds/TABZ-DLL-MonoScript-Inventory.apk
+            DLLCompileTest/Assets/Resources/TABZDllMonoScriptInventory.txt
+          if-no-files-found: error
+          retention-days: 14
