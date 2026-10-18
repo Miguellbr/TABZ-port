@@ -1,6 +1,9 @@
 name: TABZ DLL MonoScript inventory (Android diagnostic)
 
 on:
+  push:
+    branches:
+      - audit/patched-input-runtime
   workflow_dispatch:
 
 permissions:
