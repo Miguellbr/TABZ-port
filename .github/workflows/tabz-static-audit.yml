@@ -44,8 +44,7 @@ jobs:
           mkdir -p audit-work/ilspy
           find DLLCompileTest original-project -type f \( -name 'Assembly-CSharp.dll' -o -name 'Assembly-CSharp-firstpass.dll' -o -name 'Photon3Unity3D.dll' -o -name 'TabzInputShim.dll' \) -print0 > /tmp/tabz-dlls.list
           while IFS= read -r -d '' dll; do
-            rel="\${dll#./}"
-            safe="$(printf '%s' "$rel" | tr '/ ' '__')"
+            safe="$(printf '%s' "$dll" | tr '/ ' '__')"
             out="audit-work/ilspy/$safe"
             mkdir -p "$out"
             echo "Decompiling $dll"
