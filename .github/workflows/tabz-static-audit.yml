@@ -1,0 +1,54 @@
+name: TABZ static DLL and scene audit
+
+on:
+  push:
+    branches:
+      - audit/patched-input-runtime
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: audit/patched-input-runtime
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install ILSpy command line
+        run: dotnet tool install ilspycmd --tool-path ./ilspy-tools
+
+      - name: Decompile managed assemblies for static type inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-work/ilspy
+          for dll in DLLCompileTest/Assets/Plugins/Managed/Assembly-CSharp.dll DLLCompileTest/Assets/Plugins/Managed/Assembly-CSharp-firstpass.dll DLLCompileTest/Assets/Plugins/Managed/Photon3Unity3D.dll; do
+            if [ -f "$dll" ]; then
+              name="$(basename "$dll" .dll)"
+              mkdir -p "audit-work/ilspy/$name"
+              ./ilspy-tools/ilspycmd -p -o "audit-work/ilspy/$name" "$dll"
+            else
+              echo "::warning::Missing expected assembly: $dll"
+            fi
+          done
+
+      - name: Generate static Unity scene and DLL report
+        run: python3 scripts/tabz_static_audit.py
+
+      - name: Upload static audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabz-static-dll-scene-audit
+          path: audit-output/
+          if-no-files-found: error
+          retention-days: 30
