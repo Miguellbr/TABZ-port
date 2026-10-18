@@ -8,16 +8,26 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   static-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: audit/patched-input-runtime
+
+      - name: Download recovered original TABZ v5.1 Unity project
+        uses: actions/download-artifact@v4
+        with:
+          name: tabz-v5.1-unity-project-isolated
+          repository: Miguellbr/TABZ-port
+          run-id: 39079292075
+          github-token: \${{ github.token }}
+          path: original-project
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -27,20 +37,21 @@ jobs:
       - name: Install ILSpy command line
         run: dotnet tool install ilspycmd --tool-path ./ilspy-tools
 
-      - name: Decompile managed assemblies for static type inspection
+      - name: Decompile original and audit managed assemblies
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p audit-work/ilspy
-          for dll in DLLCompileTest/Assets/Plugins/Managed/Assembly-CSharp.dll DLLCompileTest/Assets/Plugins/Managed/Assembly-CSharp-firstpass.dll DLLCompileTest/Assets/Plugins/Managed/Photon3Unity3D.dll; do
-            if [ -f "$dll" ]; then
-              name="$(basename "$dll" .dll)"
-              mkdir -p "audit-work/ilspy/$name"
-              ./ilspy-tools/ilspycmd -p -o "audit-work/ilspy/$name" "$dll"
-            else
-              echo "::warning::Missing expected assembly: $dll"
-            fi
-          done
+          find DLLCompileTest original-project -type f \( -name 'Assembly-CSharp.dll' -o -name 'Assembly-CSharp-firstpass.dll' -o -name 'Photon3Unity3D.dll' -o -name 'TabzInputShim.dll' \) -print0 > /tmp/tabz-dlls.list
+          while IFS= read -r -d '' dll; do
+            rel="\${dll#./}"
+            safe="$(printf '%s' "$rel" | tr '/ ' '__')"
+            out="audit-work/ilspy/$safe"
+            mkdir -p "$out"
+            echo "Decompiling $dll"
+            ./ilspy-tools/ilspycmd -p -o "$out" "$dll"
+          done < /tmp/tabz-dlls.list
+          test -s /tmp/tabz-dlls.list
 
       - name: Generate static Unity scene and DLL report
         run: python3 scripts/tabz_static_audit.py
