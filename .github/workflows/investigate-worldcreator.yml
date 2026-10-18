@@ -39,64 +39,24 @@ jobs:
             TABZ/TABZ Modded v4/GAME_Data/Managed
             TABZ/TABZ Modded v4/MODS
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: A. Search every branch for file names
+      - name: B. Player logs around the missing-script messages
         run: |
           mkdir -p out
-          git fetch --no-tags --filter=blob:none --depth=1 origin '+refs/heads/*:refs/remotes/origin/*' > /dev/null 2>&1 || true
-          {
-            for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin | grep -v '/HEAD$'); do
-              echo "== $b"
-              echo "-- names containing worldcreator/terrain:"
-              git ls-tree -r --name-only "$b" | grep -i -E 'worldcreator|terrain' | head -20 || true
-              echo "-- dll / unitypackage / bundle files:"
-              git ls-tree -r --name-only "$b" | grep -i -E '\.(dll|unitypackage|unity3d|assetbundle)$' | head -60 || true
-            done
-          } 2>&1 | tee out/A-branches.txt
-
-      - name: B. Text files and player logs
-        run: |
           V5="v51/TABZ/TABZ modded v5"; V4="v4/TABZ/TABZ Modded v4"
           {
-            for f in name.txt size.txt coords.txt; do echo "### v5.1 $f"; cat "$V5/$f"; echo; done
-            echo "### v5.1 MODS and v4 MODS"
-            ls -la "$V5/MODS" "$V4/MODS"
-            echo "### sha1 of Assembly-CSharp.dll and MODS dlls"
-            sha1sum "$V5/GAME_Data/Managed/Assembly-CSharp.dll" "$V5/MODS/"*.dll "$V4/GAME_Data/Managed/"Assembly-C*.dll "$V4/MODS/"*.dll
             for L in "$V5/GAME_Data/output_log.txt" "$V4/GAME_Data/output_log.txt"; do
+              echo "### $L"
+              grep -n -B8 -A4 'referenced script' "$L" | head -80 || true
               echo
-              echo "### $L ($(wc -l < "$L") lines)"
-              head -20 "$L"
-              echo "--- lines matching worldcreator|referenced script|missing|terrain|NullReference|Exception:"
-              grep -n -i -E 'worldcreator|referenced script|missing|terrain|NullReference|Exception' "$L" | head -50 || true
             done
-          } 2>&1 | tee out/B-logs.txt
+          } 2>&1 | tee out/B-logs-context.txt
 
-      - name: C. Byte scan of original files for WorldCreator
-        run: |
-          V5="v51/TABZ/TABZ modded v5"; V4="v4/TABZ/TABZ Modded v4"
-          python3 Tools/Investigate/scan_strings.py "$V5" "$V4/GAME_Data/Managed" "$V4/MODS" 2>&1 | tee out/C-strings.txt
-
-      - name: D. IL scan (references and Terrain API usage)
-        run: |
-          V5="v51/TABZ/TABZ modded v5"; V4="v4/TABZ/TABZ Modded v4"
-          dotnet build Tools/IlRefScan/IlRefScan.csproj -c Release -o build/refscan > /dev/null
-          M="$V5/GAME_Data/Managed"
-          dotnet build/refscan/TabzIlRefScan.dll "$M" out/D-ilscan.txt \
-            "$M/Assembly-CSharp.dll" "$M/Assembly-CSharp-firstpass.dll" "$M/Photon3Unity3D.dll" \
-            "$V4/GAME_Data/Managed/Assembly-Csharp.dll" \
-            "$V4/MODS/previousmod.dll" "$V4/MODS/notsurewhichmod.dll"
-
-      - name: E. Unity scene inspection
+      - name: E. Unity scene inspection (revision 2)
         run: |
           V5="v51/TABZ/TABZ modded v5"
           pip install UnityPy > /dev/null
@@ -106,6 +66,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tabz-worldcreator-investigation
+          name: tabz-worldcreator-investigation-2
           path: out/
           retention-days: 14
