@@ -26,7 +26,7 @@ jobs:
           name: tabz-v5.1-unity-project-isolated
           repository: Miguellbr/TABZ-port
           run-id: 39079292075
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
           path: original-project
 
       - name: Set up .NET
