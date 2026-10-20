@@ -4,7 +4,6 @@ on:
   push:
     branches: [tools/il-patch-input]
     paths:
-      - 'Tools/Minimal/**'
       - '.github/workflows/minimal-discover.yml'
   workflow_dispatch:
 
