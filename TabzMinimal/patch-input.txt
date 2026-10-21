@@ -1,0 +1,62 @@
+INPUT: orig/TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp.dll
+OUTPUT: out/dlls/Assembly-CSharp.dll
+REDIRECTED CALLS: 117
+CONFIRMED TabzInput CALLS IN OUTPUT FILE: 117
+
+REDIRECTED BY METHOD:
+  10x  Input.get_mousePosition()UnityEngine.Vector3
+  10x  Input.GetAxis(System.String)System.Single
+  20x  Input.GetAxisRaw(System.String)System.Single
+  8x  Input.GetButton(System.String)System.Boolean
+  5x  Input.GetButtonDown(System.String)System.Boolean
+  1x  Input.GetButtonUp(System.String)System.Boolean
+  30x  Input.GetKey(UnityEngine.KeyCode)System.Boolean
+  22x  Input.GetKeyDown(UnityEngine.KeyCode)System.Boolean
+  3x  Input.GetKeyUp(UnityEngine.KeyCode)System.Boolean
+  4x  Input.GetMouseButton(System.Int32)System.Boolean
+  3x  Input.GetMouseButtonDown(System.Int32)System.Boolean
+  1x  Input.GetMouseButtonUp(System.Int32)System.Boolean
+
+REDIRECTED BY TYPE:
+  3x  CameraMovement
+  2x  ChatGui
+  2x  ClickDetector
+  3x  DeepSky.Haze.Demo.BasicMouseLookControl
+  1x  DragToMove
+  2x  DragToMove/<RecordMouse>c__Iterator0
+  2x  ExampleWheelController
+  1x  ExitGames.Demos.DemoAnimator.GameManager
+  3x  ExitGames.Demos.DemoAnimator.PlayerAnimatorManager
+  2x  ExitGames.Demos.DemoAnimator.PlayerManager
+  4x  IdleRunJump
+  8x  InputToEvent
+  3x  JumpAndRunMovement
+  7x  MoveByKeys
+  2x  NamePickGui
+  1x  NetworkStatistics
+  2x  OnClickRequestOwnership
+  1x  PauseMenuHandler
+  2x  PhotonStatsGui
+  1x  PhysicsAmimationController
+  1x  PickupCamera
+  7x  PickupController
+  6x  PlayerHandler
+  1x  PlayerInteraction
+  2x  PointedAtGameObjectInfo
+  1x  QuitOnEscapeOrBack
+  8x  RPGCamera
+  10x  RPGMovement
+  2x  RpsCore
+  4x  StandHandler
+  2x  TABZChat
+  1x  ThirdPersonCamera
+  7x  ThirdPersonController
+  4x  UIInventory
+  1x  UIInventoryItem
+  5x  Weapon
+  3x  WeaponHandler
+
+UNMAPPED Input CALLS (left untouched, need a shim method if they matter):
+  1x  Input.get_anyKey()System.Boolean
+  4x  Input.get_touchCount()System.Int32
+  2x  Input.GetTouch(System.Int32)UnityEngine.Touch

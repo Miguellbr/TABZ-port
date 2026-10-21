@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 1880604398, guid: f2dd59e2e193e1aadacf6a4926684933, type: 3}
+  m_Name: PhotonServerSettings
+  m_EditorClassIdentifier:
+  AppID: 20a493ff-98f1-4118-bb50-6819eb06f626
+  VoiceAppID:
+  ChatAppID:
+  HostType: 1
+  PreferredRegion: 0
+  EnabledRegions: -1
+  Protocol: 0
+  ServerAddress:
+  ServerPort: 5055
+  VoiceServerPort: 5055
+  JoinLobby: 0
+  EnableLobbyStatistics: 0
+  PunLogging: 0
+  NetworkLogging: 1
+  RunInBackground: 1
+  RpcList:
+  - Chat
+  - ColorRpc
+  - DestroyRpc
+  - DoJump
+  - Flash
+  - InstantiateRpc
+  - Marco
+  - OnAwakeRPC
+  - PickupItemInit
+  - Polo
+  - PunPickup
+  - PunPickupSimple
+  - PunRespawn
+  - RequestForPickupItems
+  - RequestForPickupTimes
+  - TaggedPlayer
+  - TakeDamage
+  - RequestSpawnZombie
+  - AddFeedMessage
+  - RequestDestroyZombies
+  - NetworkDestroy
+  - RecieveSillyWalk
+  - AddForce
+  - NetworkZombieDied
+  - RecieveOffset
+  - TargetChangedPlayer
+  - TargetChangedPOI
+  - Fall
+  - PunchRPC
+  - Taken
+  - Fire
+  - WeaponSwitched
+  - RecieveHealth
+  - Dropped
+  - SyncChunks
+  - SpawnSuccess
+  - RequestSpawnZombies
+  - ShowText
+  - SendChatMessage
+  - GangstaAimRPC
+  - Swing
+  DisableAutoOpenWizard: 1

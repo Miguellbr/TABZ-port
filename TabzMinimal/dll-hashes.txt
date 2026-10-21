@@ -1,0 +1,7 @@
+4ff685d51707e90a31dbbd0b2f1a6cc6eed71b4a  orig/TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp.dll
+0d998a377637cc7e473177478bdf5dbbfa573035  orig/TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+3048f73e1390010e28317d04e1667cb0f91b2f2a  orig/TABZ/TABZ modded v5/GAME_Data/Managed/Photon3Unity3D.dll
+c2276effc25227df3a3194e920780d31f05f7fce  out/dlls/Assembly-CSharp-firstpass.dll
+87e7938ceded4b5b2431072efc51cde2674a2ab1  out/dlls/Assembly-CSharp.dll
+3048f73e1390010e28317d04e1667cb0f91b2f2a  out/dlls/Photon3Unity3D.dll
+605095b0fac90552c8acec6de43571f09b189e98  out/dlls/TabzInputShim.dll

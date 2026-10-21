@@ -1,0 +1,27 @@
+fileFormatVersion: 2
+guid: b8baafc2a3a24714ba1ef829604b7318
+timeCreated: 1792580397
+licenseType: Free
+TrueTypeFontImporter:
+  serializedVersion: 4
+  name:
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontName: eurofurence
+  fontNames:
+  - eurofurence
+  fallbackFontReferences:
+  - {fileID: 12800000, guid: b656034a3f6374e42a1c7a501c90a95e, type: 3}
+  - {fileID: 12800000, guid: f30181323b3ce7340bd3dc5b5cb623cc, type: 3}
+  - {fileID: 12800000, guid: ecb11a430aa5e9a4ba07ba2166db8403, type: 3}
+  customCharacters:
+  fontRenderingMode: 0
+  output:
+    hasEmptyFontData: 0
+  ascentCalculationMode: 1
+  userData:
+  assetBundleName:
+  assetBundleVariant:

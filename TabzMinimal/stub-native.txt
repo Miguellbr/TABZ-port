@@ -1,0 +1,32 @@
+INPUT: orig/TABZ/TABZ modded v5/GAME_Data/Managed/Assembly-CSharp-firstpass.dll
+OUTPUT: out/dlls/Assembly-CSharp-firstpass.dll
+OPTIONS: --steam --fmod-silent
+P/INVOKE METHODS STUBBED: 1345
+  CSteamworks: 850
+  fmodstudio: 487
+  sdkencryptedappticket: 8
+InteropHelp.TestIf* made no-op: 3
+TARGETED P/INVOKE LEFT IN OUTPUT FILE: 0
+
+  original IL of InteropHelp::TestIfPlatformSupported()
+    IL_0000: ret
+  original IL of InteropHelp::TestIfAvailableClient()
+    IL_0000: call System.Void Steamworks.InteropHelp::TestIfPlatformSupported()
+    IL_0005: call System.IntPtr Steamworks.NativeMethods::SteamClient()
+    IL_000a: ldsfld System.IntPtr System.IntPtr::Zero
+    IL_000f: call System.Boolean System.IntPtr::op_Equality(System.IntPtr,System.IntPtr)
+    IL_0014: brfalse IL_0024
+    IL_0019: ldstr "Steamworks is not initialized."
+    IL_001e: newobj System.Void System.InvalidOperationException::.ctor(System.String)
+    IL_0023: throw
+    IL_0024: ret
+  original IL of InteropHelp::TestIfAvailableGameServer()
+    IL_0000: call System.Void Steamworks.InteropHelp::TestIfPlatformSupported()
+    IL_0005: call System.IntPtr Steamworks.NativeMethods::SteamGameServerClient()
+    IL_000a: ldsfld System.IntPtr System.IntPtr::Zero
+    IL_000f: call System.Boolean System.IntPtr::op_Equality(System.IntPtr,System.IntPtr)
+    IL_0014: brfalse IL_0024
+    IL_0019: ldstr "Steamworks is not initialized."
+    IL_001e: newobj System.Void System.InvalidOperationException::.ctor(System.String)
+    IL_0023: throw
+    IL_0024: ret
