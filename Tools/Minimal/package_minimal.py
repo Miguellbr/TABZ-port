@@ -8,6 +8,9 @@ Rules:
   * A reference is rewritten only when (assembly, namespace, class) really exists in the DLL type list. Anything else is
     kept untouched and listed in RECOVERY-REPORT.md.
   * Nothing is invented: positions, scales, parameters inside the original assets are copied as exported.
+
+Revision 2: scripts exported outside Assets/Scripts (FMOD integration, cinematic effects...) are matched by
+namespace+class against ALL shipped assemblies; they are used only when exactly one assembly contains the class.
 """
 import argparse
 import collections
@@ -85,10 +88,12 @@ def R(line=''):
 
 
 types = collections.defaultdict(set)
+asm_case = {}
 for line in pathlib.Path(args.types).read_text(encoding='utf-8').splitlines():
     parts = line.split('|')
     if len(parts) >= 3:
         types[parts[0].lower()].add((parts[1], parts[2]))
+        asm_case[parts[0].lower()] = parts[0]
 
 guid_path = {}
 for meta in assets.rglob('*.meta'):
@@ -100,21 +105,31 @@ for meta in assets.rglob('*.meta'):
 ns_rx = re.compile(r'^\s*namespace\s+([\w.]+)', re.M)
 script_map = {}
 scripts_dir = assets / 'Scripts'
-for cs in scripts_dir.rglob('*.cs'):
+for cs in assets.rglob('*.cs'):
     meta = cs.with_name(cs.name + '.meta')
     if not meta.is_file():
         continue
     m = re.search(r'^guid:\s*([0-9a-f]{32})', meta.read_text(encoding='utf-8', errors='replace'), re.M)
     if not m:
         continue
-    asm = cs.relative_to(scripts_dir).parts[0]
+    rel = cs.relative_to(assets)
     text = cs.read_text(encoding='utf-8', errors='replace')
     nm = ns_rx.search(text)
     ns = nm.group(1) if nm else ''
     cls = cs.stem
-    ok = (ns, cls) in types.get(asm.lower(), set())
+    if rel.parts[0] == 'Scripts' and len(rel.parts) > 2:
+        asm = rel.parts[1]
+        ok = (ns, cls) in types.get(asm.lower(), set())
+        how = 'folder'
+    else:
+        cands = [asm_case[a] for a, s in types.items() if (ns, cls) in s]
+        if len(cands) == 1:
+            asm, ok = cands[0], True
+        else:
+            asm, ok = rel.parts[0], False
+        how = 'type search (%d candidate assemblies)' % len(cands)
     script_map[m.group(1)] = dict(asm=asm, ns=ns, cls=cls, ok=ok, file_id=file_id(ns, cls),
-                                  new_guid=plugin_guid(asm), rel=cs.relative_to(assets).as_posix())
+                                  new_guid=plugin_guid(asm), rel=rel.as_posix(), how=how)
 ok_count = sum(1 for v in script_map.values() if v['ok'])
 
 SCRIPT_REF = re.compile(r'\{fileID: 11500000, guid: ([0-9a-f]{32}), type: 3\}')
@@ -368,14 +383,19 @@ R('Shipped plugin DLLs (guid written into each .meta):')
 for name, size, g in shipped:
     R('- `%s` %d bytes guid `%s`' % (name, size, g))
 R()
-R('Rewritten references by class (top 60):')
-for (asm, ns, cls), c in remapped.most_common(60):
+R('Rewritten references by class (top 80):')
+for (asm, ns, cls), c in remapped.most_common(80):
     R('- %5d x `%s%s` [%s] fileID %d' % (c, ns + '.' if ns else '', cls, asm, file_id(ns, cls)))
+R()
+R('Scripts outside Assets/Scripts that were matched by type search (assembly found by namespace+class):')
+for g, v in sorted(script_map.items(), key=lambda kv: kv[1]['cls']):
+    if v['how'] != 'folder' and (v['asm'], v['ns'], v['cls']) in remapped:
+        R('- `%s%s` -> %s (%s)' % (v['ns'] + '.' if v['ns'] else '', v['cls'], v['asm'], v['rel']))
 R()
 R('Exported scripts that could NOT be matched to a DLL class (kept, not removed):')
 bad = [(g, v) for g, v in script_map.items() if not v['ok'] and g in unmapped]
 for g, v in sorted(bad, key=lambda kv: -unmapped[kv[0]])[:60]:
-    R('- %5d x `%s%s` [assembly folder %s] guid %s (%s)' % (unmapped[g], v['ns'] + '.' if v['ns'] else '', v['cls'], v['asm'], g, v['rel']))
+    R('- %5d x `%s%s` [%s] guid %s (%s)' % (unmapped[g], v['ns'] + '.' if v['ns'] else '', v['cls'], v['asm'], g, v['rel']))
 R()
 R('Script guids that are not an exported script at all (built-in package scripts such as UnityEngine.UI keep their own guid):')
 for g, c in unmapped.most_common(40):
